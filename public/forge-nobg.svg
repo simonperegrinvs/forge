@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a3a3e"/>
+      <stop offset="100%" stop-color="#1a1a1e"/>
+    </linearGradient>
+    
+    <!-- Fire gradient -->
+    <radialGradient id="fireGlow" cx="50%" cy="60%" r="50%">
+      <stop offset="0%" stop-color="#fff5cc" stop-opacity="0.9"/>
+      <stop offset="30%" stop-color="#ffaa00" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ff4400" stop-opacity="0"/>
+    </radialGradient>
+    
+    <linearGradient id="flameOuter" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#ff6600"/>
+      <stop offset="50%" stop-color="#ff8800"/>
+      <stop offset="100%" stop-color="#ffaa00"/>
+    </linearGradient>
+    
+    <linearGradient id="flameInner" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#ffbb33"/>
+      <stop offset="50%" stop-color="#ffdd66"/>
+      <stop offset="100%" stop-color="#fff5cc"/>
+    </linearGradient>
+    
+    <linearGradient id="flameCore" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#ffdd88"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    
+    <!-- Anvil gradients -->
+    <linearGradient id="anvilTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#888890"/>
+      <stop offset="50%" stop-color="#66666e"/>
+      <stop offset="100%" stop-color="#55555d"/>
+    </linearGradient>
+    
+    <linearGradient id="anvilBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#44444c"/>
+      <stop offset="100%" stop-color="#2a2a30"/>
+    </linearGradient>
+    
+    <linearGradient id="anvilBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a3a42"/>
+      <stop offset="100%" stop-color="#28282e"/>
+    </linearGradient>
+    
+    <!-- Hammer gradient -->
+    <linearGradient id="hammerHead" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#999"/>
+      <stop offset="100%" stop-color="#666"/>
+    </linearGradient>
+    
+    <linearGradient id="hammerHandle" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8B7355"/>
+      <stop offset="50%" stop-color="#A0896C"/>
+      <stop offset="100%" stop-color="#7A6248"/>
+    </linearGradient>
+    
+    <!-- Circuit node glow -->
+    <filter id="nodeGlow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <filter id="fireGlowFilter">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Brace gradient -->
+    <linearGradient id="braceGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cccccc"/>
+      <stop offset="100%" stop-color="#888888"/>
+    </linearGradient>
+    
+    <!-- Anvil top shine -->
+    <linearGradient id="anvilShine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#aaaaB0"/>
+      <stop offset="100%" stop-color="#77777f"/>
+    </linearGradient>
+  </defs>
+  
+
+  
+  <!-- Fire glow background -->
+  <ellipse cx="256" cy="195" rx="100" ry="110" fill="url(#fireGlow)" opacity="0.5"/>
+  
+  <!-- === CIRCUIT LINES AND NODES === -->
+  <g filter="url(#nodeGlow)">
+    <!-- Left circuit paths -->
+    <path d="M148 165 L178 165 L195 185" stroke="#ff8800" stroke-width="2.5" fill="none" opacity="0.8"/>
+    <path d="M130 215 L170 215 L190 200" stroke="#ff8800" stroke-width="2.5" fill="none" opacity="0.8"/>
+    <path d="M155 130 L185 150 L200 165" stroke="#ff8800" stroke-width="2.5" fill="none" opacity="0.7"/>
+    
+    <!-- Right circuit paths -->
+    <path d="M364 165 L334 165 L317 185" stroke="#ff8800" stroke-width="2.5" fill="none" opacity="0.8"/>
+    <path d="M382 215 L342 215 L322 200" stroke="#ff8800" stroke-width="2.5" fill="none" opacity="0.8"/>
+    <path d="M357 130 L327 150 L312 165" stroke="#ff8800" stroke-width="2.5" fill="none" opacity="0.7"/>
+    
+    <!-- Left nodes -->
+    <circle cx="148" cy="165" r="6" fill="#ff9900"/>
+    <circle cx="148" cy="165" r="3" fill="#ffcc66"/>
+    <circle cx="130" cy="215" r="6" fill="#ff9900"/>
+    <circle cx="130" cy="215" r="3" fill="#ffcc66"/>
+    <circle cx="155" cy="130" r="5" fill="#ff9900"/>
+    <circle cx="155" cy="130" r="2.5" fill="#ffcc66"/>
+    
+    <!-- Right nodes -->
+    <circle cx="364" cy="165" r="6" fill="#ff9900"/>
+    <circle cx="364" cy="165" r="3" fill="#ffcc66"/>
+    <circle cx="382" cy="215" r="6" fill="#ff9900"/>
+    <circle cx="382" cy="215" r="3" fill="#ffcc66"/>
+    <circle cx="357" cy="130" r="5" fill="#ff9900"/>
+    <circle cx="357" cy="130" r="2.5" fill="#ffcc66"/>
+  </g>
+  
+  <!-- === FLAME === -->
+  <g filter="url(#fireGlowFilter)">
+    <!-- Outer flame -->
+    <path d="M256 95
+             C240 120, 205 155, 200 190
+             C195 225, 210 260, 256 265
+             C302 260, 317 225, 312 190
+             C307 155, 272 120, 256 95Z" 
+          fill="url(#flameOuter)" opacity="0.9"/>
+    
+    <!-- Flame tongues left -->
+    <path d="M220 180
+             C215 155, 230 130, 240 110
+             C232 140, 225 160, 230 185
+             C235 200, 245 215, 240 230
+             C225 220, 218 200, 220 180Z" 
+          fill="#ff7700" opacity="0.7"/>
+    
+    <!-- Flame tongues right -->
+    <path d="M292 180
+             C297 155, 282 130, 272 110
+             C280 140, 287 160, 282 185
+             C277 200, 267 215, 272 230
+             C287 220, 294 200, 292 180Z" 
+          fill="#ff7700" opacity="0.7"/>
+    
+    <!-- Middle flame -->
+    <path d="M256 115
+             C245 140, 220 170, 218 200
+             C215 230, 230 255, 256 258
+             C282 255, 297 230, 294 200
+             C292 170, 267 140, 256 115Z" 
+          fill="url(#flameInner)" opacity="0.85"/>
+    
+    <!-- Inner bright core -->
+    <path d="M256 145
+             C250 165, 235 185, 233 205
+             C230 225, 240 248, 256 250
+             C272 248, 282 225, 279 205
+             C277 185, 262 165, 256 145Z" 
+          fill="url(#flameCore)" opacity="0.7"/>
+    
+    <!-- Hot white center -->
+    <ellipse cx="256" cy="220" rx="18" ry="28" fill="#fff8ee" opacity="0.5"/>
+  </g>
+  
+  <!-- === HAMMER === -->
+  <g transform="translate(395, 210) rotate(-45)">
+    <!-- Handle -->
+    <rect x="-5" y="-90" width="10" height="90" rx="3" fill="url(#hammerHandle)"/>
+    <line x1="-5" y1="-90" x2="-5" y2="0" stroke="#6B5540" stroke-width="1" opacity="0.5"/>
+    <line x1="5" y1="-90" x2="5" y2="0" stroke="#B09878" stroke-width="1" opacity="0.3"/>
+    
+    <!-- Hammer head -->
+    <rect x="-28" y="-115" width="56" height="30" rx="5" fill="url(#hammerHead)"/>
+    <!-- Hammer highlight -->
+    <rect x="-26" y="-113" width="52" height="4" rx="2" fill="#aaa" opacity="0.4"/>
+    <!-- Hammer shadow -->
+    <rect x="-26" y="-90" width="52" height="3" rx="1" fill="#444" opacity="0.5"/>
+  </g>
+  
+  <g transform="translate(0, -30)">
+  <!-- === ANVIL === -->
+  <!-- Anvil top surface (flat bar) -->
+  <rect x="115" y="275" width="282" height="18" rx="3" fill="url(#anvilShine)"/>
+  <!-- Top edge highlight -->
+  <rect x="115" y="275" width="282" height="4" rx="2" fill="#bbbbc0" opacity="0.5"/>
+  <!-- Top surface shadow -->
+  <rect x="115" y="289" width="282" height="4" rx="2" fill="#44444a" opacity="0.4"/>
+  
+  <!-- Anvil horn (left point) -->
+  <path d="M115 275 L80 282 L115 293Z" fill="#77777f"/>
+  <path d="M115 275 L80 282 L115 282Z" fill="#999" opacity="0.4"/>
+  
+  <!-- Anvil body -->
+  <path d="M170 293 L170 340 L150 370 L362 370 L342 340 L342 293Z" 
+        fill="url(#anvilBody)"/>
+  
+  <!-- Anvil waist/neck shadow -->
+  <path d="M170 293 L342 293 L342 310 L170 310Z" fill="#3a3a42" opacity="0.6"/>
+  
+  <!-- Anvil base -->
+  <path d="M140 370 L130 395 L382 395 L372 370Z" fill="url(#anvilBase)"/>
+  <!-- Base bottom edge -->
+  <rect x="130" y="392" width="252" height="5" rx="2" fill="#222228"/>
+  <!-- Base top highlight -->
+  <rect x="142" y="370" width="228" height="3" rx="1" fill="#4a4a52" opacity="0.5"/>
+  
+  <!-- === CURLY BRACES === -->
+  <g filter="url(#softGlow)">
+    <!-- Left brace { -->
+    <text x="195" y="380" font-family="'Courier New', monospace" font-size="100" font-weight="bold" fill="url(#braceGrad)" text-anchor="middle">
+      {
+    </text>
+    
+    <!-- Right brace } -->
+    <text x="317" y="380" font-family="'Courier New', monospace" font-size="100" font-weight="bold" fill="url(#braceGrad)" text-anchor="middle">
+      }
+    </text>
+  </g>
+  
+  <!-- Subtle reflection on anvil from fire -->
+  <rect x="180" y="275" width="152" height="8" rx="2" fill="#ff8800" opacity="0.1"/>
+  <rect x="200" y="275" width="112" height="5" rx="2" fill="#ffaa00" opacity="0.08"/>
+  </g>
+</svg>

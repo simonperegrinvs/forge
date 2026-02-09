@@ -68,6 +68,54 @@ const baseProps = {
 };
 
 describe("Sidebar", () => {
+  it("toggles Forge panel from the header anvil icon", () => {
+    render(<Sidebar {...baseProps} />);
+
+    expect(screen.queryByText("Forge")).toBeNull();
+    expect(screen.getByText("Add a workspace to start.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
+
+    expect(screen.getByText("Forge")).toBeTruthy();
+    expect(screen.getByText("Click to select")).toBeTruthy();
+    expect(screen.queryByText("Add a workspace to start.")).toBeNull();
+
+    const runButton = screen.getByRole("button", { name: "Run plan" });
+    expect(runButton.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("closes Forge when the search toggle is activated", () => {
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
+    expect(screen.getByText("Forge")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle search" }));
+    expect(screen.queryByText("Forge")).toBeNull();
+    expect(screen.getByLabelText("Search projects")).toBeTruthy();
+  });
+
+  it("enables and toggles the Forge execute button after selecting a plan", () => {
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
+
+    const runButton = screen.getByRole("button", { name: "Run plan" });
+    expect(runButton.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Plan Alpha" }));
+
+    const enabledRun = screen.getByRole("button", { name: "Run plan" });
+    expect(enabledRun.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(enabledRun);
+    const pauseButton = screen.getByRole("button", { name: "Pause plan" });
+    fireEvent.click(pauseButton);
+
+    expect(screen.getByRole("button", { name: "Run plan" })).toBeTruthy();
+  });
+
   it("toggles the search bar from the header icon", () => {
     vi.useFakeTimers();
     render(<Sidebar {...baseProps} />);

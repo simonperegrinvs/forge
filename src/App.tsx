@@ -26,6 +26,8 @@ import "./styles/prompts.css";
 import "./styles/debug.css";
 import "./styles/terminal.css";
 import "./styles/plan.css";
+import "./styles/forge.css";
+import "./styles/material-symbols.css";
 import "./styles/about.css";
 import "./styles/tabbar.css";
 import "./styles/worktree-modal.css";
