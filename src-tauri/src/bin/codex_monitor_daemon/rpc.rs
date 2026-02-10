@@ -294,6 +294,16 @@ pub(super) async fn handle_rpc_request(
             state.forge_uninstall_template(workspace_id).await?;
             Ok(json!({ "ok": true }))
         }
+        "forge_list_plans" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plans = state.forge_list_plans(workspace_id).await?;
+            serde_json::to_value(plans).map_err(|err| err.to_string())
+        }
+        "forge_get_plan_prompt" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let prompt = state.forge_get_plan_prompt(workspace_id).await?;
+            serde_json::to_value(prompt).map_err(|err| err.to_string())
+        }
         "get_app_settings" => {
             let settings = state.get_app_settings().await;
             serde_json::to_value(settings).map_err(|err| err.to_string())

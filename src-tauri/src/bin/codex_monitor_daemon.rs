@@ -85,8 +85,8 @@ use backend::events::{AppServerEvent, EventSink, TerminalExit, TerminalOutput};
 use shared::codex_core::CodexLoginCancelState;
 use shared::prompts_core::{self, CustomPromptEntry};
 use shared::{
-    codex_aux_core, codex_core, files_core, forge_templates_core, git_core, git_ui_core,
-    local_usage_core, settings_core, workspaces_core, worktree_core,
+    codex_aux_core, codex_core, files_core, forge_plans_core, forge_templates_core, git_core,
+    git_ui_core, local_usage_core, settings_core, workspaces_core, worktree_core,
 };
 use storage::{read_settings, read_workspaces};
 use types::{
@@ -643,6 +643,11 @@ impl DaemonState {
         workspace_id: String,
     ) -> Result<Option<forge_templates_core::ForgeTemplateLockV1>, String> {
         let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        if let Err(err) =
+            forge_templates_core::sync_agent_skills_into_repo_agents_dir_core(&workspace_root)
+        {
+            eprintln!("forge_get_installed_template: failed to sync skills into .agents: {err}");
+        }
         forge_templates_core::read_installed_template_lock_core(&workspace_root)
     }
 
@@ -653,16 +658,40 @@ impl DaemonState {
     ) -> Result<forge_templates_core::ForgeTemplateLockV1, String> {
         let templates_root = self.bundled_templates_root_for_daemon()?;
         let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
-        forge_templates_core::install_bundled_template_core(
+        let lock = forge_templates_core::install_bundled_template_core(
             &templates_root,
             &workspace_root,
             template_id.trim(),
-        )
+        )?;
+        if let Err(err) =
+            forge_templates_core::sync_agent_skills_into_repo_agents_dir_core(&workspace_root)
+        {
+            eprintln!("forge_install_template: failed to sync skills into .agents: {err}");
+        }
+        Ok(lock)
     }
 
     async fn forge_uninstall_template(&self, workspace_id: String) -> Result<(), String> {
         let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
         forge_templates_core::uninstall_template_core(&workspace_root)
+    }
+
+    async fn forge_list_plans(
+        &self,
+        workspace_id: String,
+    ) -> Result<Vec<forge_plans_core::ForgeWorkspacePlanV1>, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_plans_core::list_plans_core(&workspace_root)
+    }
+
+    async fn forge_get_plan_prompt(&self, workspace_id: String) -> Result<String, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        if let Err(err) =
+            forge_templates_core::sync_agent_skills_into_repo_agents_dir_core(&workspace_root)
+        {
+            eprintln!("forge_get_plan_prompt: failed to sync skills into .agents: {err}");
+        }
+        forge_templates_core::read_installed_template_plan_prompt_core(&workspace_root)
     }
 
     async fn start_thread(&self, workspace_id: String) -> Result<Value, String> {

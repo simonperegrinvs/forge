@@ -56,6 +56,7 @@ type MessagesProps = {
     response: RequestUserInputResponse,
   ) => void;
   onPlanAccept?: () => void;
+  onPlanExport?: () => void;
   onPlanSubmitChanges?: (changes: string) => void;
   onOpenThreadLink?: (threadId: string) => void;
 };
@@ -76,6 +77,7 @@ export const Messages = memo(function Messages({
   userInputRequests = [],
   onUserInputSubmit,
   onPlanAccept,
+  onPlanExport,
   onPlanSubmitChanges,
   onOpenThreadLink,
 }: MessagesProps) {
@@ -355,6 +357,19 @@ export const Messages = memo(function Messages({
           }
           onPlanAccept();
         }}
+        onExport={
+          onPlanExport
+            ? () => {
+                if (threadId && planFollowup.planItemId) {
+                  setDismissedPlanFollowupByThread((prev) => ({
+                    ...prev,
+                    [threadId]: planFollowup.planItemId!,
+                  }));
+                }
+                onPlanExport();
+              }
+            : undefined
+        }
         onSubmitChanges={(changes) => {
           if (threadId && planFollowup.planItemId) {
             setDismissedPlanFollowupByThread((prev) => ({

@@ -7,6 +7,7 @@ import LayoutTemplate from "lucide-react/dist/esm/icons/layout-template";
 import Pause from "lucide-react/dist/esm/icons/pause";
 import Play from "lucide-react/dist/esm/icons/play";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CollaborationModeOption, WorkspaceInfo } from "../../../types";
 import { ModalShell } from "../../design-system/components/modal/ModalShell";
 import { MaterialSymbol } from "../../design-system/components/icons/MaterialSymbol";
 import {
@@ -21,6 +22,14 @@ import {
   forgeUninstallTemplate,
   type ForgeBundledTemplateInfo,
   type ForgeTemplateLock,
+  type ForgeWorkspacePlan,
+} from "../../../services/tauri";
+import {
+  connectWorkspace,
+  forgeGetPlanPrompt,
+  forgeListPlans,
+  sendUserMessage,
+  startThread,
 } from "../../../services/tauri";
 
 export type ForgeTemplatesClient = {
@@ -30,11 +39,34 @@ export type ForgeTemplatesClient = {
   uninstallTemplate: (workspaceId: string) => Promise<void>;
 };
 
+export type ForgePlansClient = {
+  listPlans: (workspaceId: string) => Promise<ForgeWorkspacePlan[]>;
+  getPlanPrompt: (workspaceId: string) => Promise<string>;
+  connectWorkspace: (workspaceId: string) => Promise<void>;
+  startThread: (workspaceId: string) => Promise<any>;
+  sendUserMessage: (
+    workspaceId: string,
+    threadId: string,
+    text: string,
+    options?: {
+      collaborationMode?: Record<string, unknown> | null;
+    },
+  ) => Promise<any>;
+};
+
 const defaultForgeTemplatesClient: ForgeTemplatesClient = {
   listBundledTemplates: forgeListBundledTemplates,
   getInstalledTemplate: forgeGetInstalledTemplate,
   installTemplate: forgeInstallTemplate,
   uninstallTemplate: forgeUninstallTemplate,
+};
+
+const defaultForgePlansClient: ForgePlansClient = {
+  listPlans: forgeListPlans,
+  getPlanPrompt: forgeGetPlanPrompt,
+  connectWorkspace,
+  startThread,
+  sendUserMessage,
 };
 
 type ForgePhase = {
@@ -57,6 +89,37 @@ type ForgePlan = {
   phases: ForgePhase[];
   items: ForgePlanItem[];
 };
+
+const PHASE_ICONS = ["looks_one", "looks_two", "looks_3", "looks_4", "looks_5"];
+
+function formatPlanLabel(plan: ForgeWorkspacePlan): string {
+  const title = plan.title?.trim() ?? "";
+  const goal = plan.goal?.trim() ?? "";
+  const id = plan.id?.trim() ?? "";
+  if (title && id) {
+    return `${title} (${id})`;
+  }
+  if (title) {
+    return title;
+  }
+  const shortGoal =
+    goal.length > 60 ? `${goal.slice(0, 57).trimEnd()}...` : goal;
+  if (shortGoal && id) {
+    return `${shortGoal} (${id})`;
+  }
+  return shortGoal || id || "Untitled plan";
+}
+
+function mapForgeItemStatus(status: string): ForgeItemStatus {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "completed") {
+    return "completed";
+  }
+  if (normalized === "in_progress") {
+    return "inProgress";
+  }
+  return "pending";
+}
 
 function PhaseRow({
   phases,
@@ -211,19 +274,93 @@ function ForgeTemplatesModal({
 
 export function Forge({
   activeWorkspaceId,
+  activeWorkspace = null,
+  sendUserMessageToThread,
   templatesClient,
+  plansClient,
+  onSelectThread,
+  collaborationModes = [],
+  onSelectCollaborationMode,
 }: {
   activeWorkspaceId: string | null;
+  activeWorkspace?: WorkspaceInfo | null;
+  sendUserMessageToThread?: (
+    workspace: WorkspaceInfo,
+    threadId: string,
+    message: string,
+    imageIds: string[],
+    options?: {
+      collaborationMode?: Record<string, unknown> | null;
+    },
+  ) => Promise<void>;
   templatesClient?: ForgeTemplatesClient;
+  plansClient?: ForgePlansClient;
+  onSelectThread?: (workspaceId: string, threadId: string) => void;
+  collaborationModes?: CollaborationModeOption[];
+  onSelectCollaborationMode?: (id: string | null) => void;
 }) {
   const client = templatesClient ?? defaultForgeTemplatesClient;
+  const plansApi = plansClient ?? defaultForgePlansClient;
   const listBundledTemplates = client.listBundledTemplates;
   const getInstalledTemplate = client.getInstalledTemplate;
   const installTemplate = client.installTemplate;
   const uninstallTemplate = client.uninstallTemplate;
+  const listPlans = plansApi.listPlans;
+  const getPlanPrompt = plansApi.getPlanPrompt;
+  const connectWorkspaceToRun = plansApi.connectWorkspace;
+  const startThreadForPlan = plansApi.startThread;
+  const sendUserMessageToPlanThread = plansApi.sendUserMessage;
+
+  const findCollaborationMode = useCallback(
+    (wanted: string) => {
+      const normalized = wanted.trim().toLowerCase();
+      if (!normalized) {
+        return null;
+      }
+      return (
+        collaborationModes.find(
+          (mode) => mode.id.trim().toLowerCase() === normalized,
+        ) ??
+        collaborationModes.find(
+          (mode) => (mode.mode || mode.id).trim().toLowerCase() === normalized,
+        ) ??
+        null
+      );
+    },
+    [collaborationModes],
+  );
+
+  const buildCollaborationModePayloadFor = useCallback(
+    (mode: CollaborationModeOption | null) => {
+      if (!mode) {
+        return null;
+      }
+      const modeValue = mode.mode || mode.id;
+      if (!modeValue) {
+        return null;
+      }
+      const modelValue = (mode.model ?? "").trim();
+      if (!modelValue) {
+        // CollaborationMode.settings.model is required by the app-server protocol.
+        // If we can't supply a model, don't send an override payload.
+        return null;
+      }
+      const settings: Record<string, unknown> = {
+        developer_instructions: mode.developerInstructions ?? null,
+        model: modelValue,
+      };
+      if (mode.reasoningEffort !== null) {
+        settings.reasoning_effort = mode.reasoningEffort;
+      }
+      return { mode: modeValue, settings };
+    },
+    [],
+  );
 
   const [templates, setTemplates] = useState<ForgeBundledTemplateInfo[]>([]);
   const [installedTemplate, setInstalledTemplate] = useState<ForgeTemplateLock | null>(null);
+  const [workspacePlans, setWorkspacePlans] = useState<ForgeWorkspacePlan[]>([]);
+  const plansInFlightRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -246,6 +383,7 @@ export function Forge({
     let cancelled = false;
     if (!activeWorkspaceId) {
       setInstalledTemplate(null);
+      setWorkspacePlans([]);
       return () => {
         cancelled = true;
       };
@@ -264,6 +402,82 @@ export function Forge({
       cancelled = true;
     };
   }, [activeWorkspaceId, getInstalledTemplate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeWorkspaceId) {
+      setWorkspacePlans([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const loadPlans = async () => {
+      if (plansInFlightRef.current) {
+        return;
+      }
+      plansInFlightRef.current = true;
+      try {
+        const next = await listPlans(activeWorkspaceId);
+        if (cancelled) {
+          return;
+        }
+        setWorkspacePlans(next);
+      } catch (error) {
+        console.warn("Failed to load Forge plans.", { error });
+      } finally {
+        plansInFlightRef.current = false;
+      }
+    };
+
+    void loadPlans();
+    const interval = window.setInterval(loadPlans, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeWorkspaceId, listPlans]);
+
+  const plans: ForgePlan[] = useMemo(() => {
+    return workspacePlans.map((plan) => {
+      const phases: ForgePhase[] = plan.phases.map((phase, index) => ({
+        name: phase.title,
+        iconName: PHASE_ICONS[index] ?? "check_circle",
+      }));
+      const phaseIndexById = new Map<string, number>();
+      plan.phases.forEach((phase, index) => {
+        phaseIndexById.set(phase.id, index);
+      });
+      const currentTaskId = plan.currentTaskId ?? null;
+      const currentTaskPhaseId =
+        currentTaskId &&
+        (plan.tasks.find((task) => task.id === currentTaskId)?.phase ?? null);
+      const currentPhaseIndex =
+        currentTaskPhaseId != null
+          ? phaseIndexById.get(currentTaskPhaseId) ?? null
+          : null;
+
+      const items: ForgePlanItem[] = plan.tasks.map((task) => {
+        const status = mapForgeItemStatus(task.status);
+        const currentPhaseForItem =
+          currentPhaseIndex != null && currentTaskId === task.id
+            ? currentPhaseIndex
+            : undefined;
+        return {
+          title: task.name,
+          status,
+          currentPhaseIndex: currentPhaseForItem,
+        };
+      });
+
+      return {
+        id: plan.id,
+        name: formatPlanLabel(plan),
+        phases,
+        items,
+      };
+    });
+  }, [workspacePlans]);
 
   const handleInstallTemplate = useCallback(
     (templateId: string) => {
@@ -294,55 +508,6 @@ export function Forge({
       });
   }, [activeWorkspaceId, uninstallTemplate]);
 
-  const plans: ForgePlan[] = useMemo(
-    () => [
-      {
-        id: "plan-alpha",
-        name: "Plan Alpha",
-        phases: [
-          { name: "Phase 1", iconName: "looks_one" },
-          { name: "Phase 2", iconName: "looks_two" },
-          { name: "Phase 3", iconName: "looks_3" },
-          { name: "Phase 4", iconName: "looks_4" },
-          { name: "Phase 5", iconName: "looks_5" },
-        ],
-        items: [
-          { title: "Item 1", status: "completed" },
-          { title: "Item 2", status: "inProgress", currentPhaseIndex: 2 },
-          { title: "Item 3", status: "pending" },
-          { title: "Item 4", status: "pending" },
-        ],
-      },
-      {
-        id: "plan-beta",
-        name: "Plan Beta",
-        phases: [
-          { name: "Research", iconName: "search" },
-          { name: "Build", iconName: "build" },
-          { name: "Ship", iconName: "rocket_launch" },
-        ],
-        items: [
-          { title: "Scope", status: "completed" },
-          { title: "Implement", status: "inProgress", currentPhaseIndex: 1 },
-          { title: "Validate", status: "pending" },
-        ],
-      },
-      {
-        id: "plan-gamma",
-        name: "Plan Gamma",
-        phases: [
-          { name: "Phase 1", iconName: "check_circle" },
-          { name: "Phase 2", iconName: "check_circle" },
-        ],
-        items: [
-          { title: "Item 1", status: "pending" },
-          { title: "Item 2", status: "pending" },
-        ],
-      },
-    ],
-    [],
-  );
-
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const selectedPlan = selectedPlanId
     ? plans.find((p) => p.id === selectedPlanId) ?? null
@@ -364,6 +529,78 @@ export function Forge({
     // Keep the execute/pause UI from “sticking” when the user switches plans.
     setIsExecuting(false);
   }, [selectedPlanId]);
+
+  useEffect(() => {
+    if (!selectedPlanId) {
+      return;
+    }
+    if (!plans.some((plan) => plan.id === selectedPlanId)) {
+      setSelectedPlanId(null);
+    }
+  }, [plans, selectedPlanId]);
+
+  const handleNewPlan = useCallback(async () => {
+    if (!activeWorkspaceId) {
+      return;
+    }
+
+    setPlanMenuOpen(false);
+
+    // Start in plan collaboration mode so the UI shows the structured plan turn item.
+    // Writing plan files is handled after planning (outside plan mode).
+    const planMode = findCollaborationMode("plan");
+    if (planMode?.id) {
+      onSelectCollaborationMode?.(planMode.id);
+    }
+    const collaborationMode = buildCollaborationModePayloadFor(planMode);
+
+    try {
+      await connectWorkspaceToRun(activeWorkspaceId);
+
+      const response = await startThreadForPlan(activeWorkspaceId);
+      const thread =
+        (response?.result?.thread ?? response?.thread ?? null) as
+          | Record<string, unknown>
+          | null;
+      const threadId = String(thread?.id ?? "").trim();
+      if (!threadId) {
+        console.warn("Forge new plan: missing thread id.", { response });
+        return;
+      }
+
+      onSelectThread?.(activeWorkspaceId, threadId);
+
+      const prompt = await getPlanPrompt(activeWorkspaceId);
+      if (!prompt.trim()) {
+        console.warn("Forge new plan: plan prompt is empty.");
+        return;
+      }
+
+      if (sendUserMessageToThread && activeWorkspace?.id === activeWorkspaceId) {
+        await sendUserMessageToThread(activeWorkspace, threadId, prompt, [], {
+          collaborationMode,
+        });
+      } else {
+        await sendUserMessageToPlanThread(activeWorkspaceId, threadId, prompt, {
+          collaborationMode,
+        });
+      }
+    } catch (error) {
+      console.warn("Forge new plan: failed to start plan thread.", { error });
+    }
+  }, [
+    activeWorkspaceId,
+    activeWorkspace,
+    buildCollaborationModePayloadFor,
+    connectWorkspaceToRun,
+    findCollaborationMode,
+    getPlanPrompt,
+    onSelectCollaborationMode,
+    onSelectThread,
+    sendUserMessageToPlanThread,
+    sendUserMessageToThread,
+    startThreadForPlan,
+  ]);
 
   return (
     <div className="forge-panel" data-testid="forge-panel">
@@ -428,10 +665,7 @@ export function Forge({
                 Other...
               </PopoverMenuItem>
               <PopoverMenuItem
-                onClick={() => {
-                  // TODO(Forge): wire new plan action
-                  setPlanMenuOpen(false);
-                }}
+                onClick={handleNewPlan}
                 data-tauri-drag-region="false"
               >
                 New plan...

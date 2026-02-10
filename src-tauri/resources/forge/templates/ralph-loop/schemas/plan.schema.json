@@ -17,6 +17,12 @@
       "maxLength": 64,
       "description": "URL-safe slug identifying this plan"
     },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 80,
+      "description": "Short friendly label for UI/menus (keep under ~60 chars)"
+    },
     "goal": {
       "type": "string",
       "minLength": 10,
@@ -138,4 +144,3 @@
     }
   }
 }
-

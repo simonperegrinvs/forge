@@ -29,6 +29,10 @@ const baseProps = {
   onRefreshAllThreads: vi.fn(),
   activeWorkspaceId: null,
   activeThreadId: null,
+  activeWorkspace: null,
+  sendUserMessageToThread: vi.fn(async () => {}),
+  collaborationModes: [],
+  onSelectCollaborationMode: vi.fn(),
   accountRateLimits: null,
   usageShowRemaining: false,
   accountInfo: null,
@@ -95,25 +99,15 @@ describe("Sidebar", () => {
     expect(screen.getByLabelText("Search projects")).toBeTruthy();
   });
 
-  it("enables and toggles the Forge execute button after selecting a plan", () => {
+  it("shows Forge plan menu actions", () => {
     render(<Sidebar {...baseProps} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
 
-    const runButton = screen.getByRole("button", { name: "Run plan" });
-    expect(runButton.hasAttribute("disabled")).toBe(true);
-
     fireEvent.click(screen.getByRole("button", { name: /Click to select/i }));
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "Plan Alpha" }));
 
-    const enabledRun = screen.getByRole("button", { name: "Run plan" });
-    expect(enabledRun.hasAttribute("disabled")).toBe(false);
-
-    fireEvent.click(enabledRun);
-    const pauseButton = screen.getByRole("button", { name: "Pause plan" });
-    fireEvent.click(pauseButton);
-
-    expect(screen.getByRole("button", { name: "Run plan" })).toBeTruthy();
+    expect(screen.getByText("Other...")).toBeTruthy();
+    expect(screen.getByText("New plan...")).toBeTruthy();
   });
 
   it("toggles the search bar from the header icon", () => {

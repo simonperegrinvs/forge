@@ -3,9 +3,11 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
 use crate::remote_backend;
+use crate::shared::forge_plans_core;
 use crate::shared::forge_templates_core::{
     find_bundled_templates_root_near_exe, install_bundled_template_core,
     list_bundled_templates_core, read_installed_template_lock_core, uninstall_template_core,
+    read_installed_template_plan_prompt_core, sync_agent_skills_into_repo_agents_dir_core,
     ForgeBundledTemplateInfo, ForgeTemplateLockV1,
 };
 use crate::state::AppState;
@@ -81,6 +83,9 @@ pub(crate) async fn forge_get_installed_template(
     }
 
     let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    if let Err(err) = sync_agent_skills_into_repo_agents_dir_core(&workspace_root) {
+        eprintln!("forge_get_installed_template: failed to sync skills into .agents: {err}");
+    }
     read_installed_template_lock_core(&workspace_root)
 }
 
@@ -104,7 +109,11 @@ pub(crate) async fn forge_install_template(
 
     let templates_root = bundled_templates_root_for_app(&app)?;
     let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
-    install_bundled_template_core(&templates_root, &workspace_root, template_id.trim())
+    let lock = install_bundled_template_core(&templates_root, &workspace_root, template_id.trim())?;
+    if let Err(err) = sync_agent_skills_into_repo_agents_dir_core(&workspace_root) {
+        eprintln!("forge_install_template: failed to sync skills into .agents: {err}");
+    }
+    Ok(lock)
 }
 
 #[tauri::command]
@@ -126,4 +135,49 @@ pub(crate) async fn forge_uninstall_template(
 
     let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
     uninstall_template_core(&workspace_root)
+}
+
+#[tauri::command]
+pub(crate) async fn forge_list_plans(
+    workspace_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Vec<forge_plans_core::ForgeWorkspacePlanV1>, String> {
+    if remote_backend::is_remote_mode(&state).await {
+        let response = remote_backend::call_remote(
+            &state,
+            app,
+            "forge_list_plans",
+            json!({ "workspaceId": workspace_id }),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|err| err.to_string());
+    }
+
+    let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    forge_plans_core::list_plans_core(&workspace_root)
+}
+
+#[tauri::command]
+pub(crate) async fn forge_get_plan_prompt(
+    workspace_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
+    if remote_backend::is_remote_mode(&state).await {
+        let response = remote_backend::call_remote(
+            &state,
+            app,
+            "forge_get_plan_prompt",
+            json!({ "workspaceId": workspace_id }),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|err| err.to_string());
+    }
+
+    let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    if let Err(err) = sync_agent_skills_into_repo_agents_dir_core(&workspace_root) {
+        eprintln!("forge_get_plan_prompt: failed to sync skills into .agents: {err}");
+    }
+    read_installed_template_plan_prompt_core(&workspace_root)
 }

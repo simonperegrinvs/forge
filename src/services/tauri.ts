@@ -944,6 +944,29 @@ export type ForgeTemplateLock = {
   installedFiles: string[];
 };
 
+export type ForgePlanPhase = {
+  id: string;
+  title: string;
+};
+
+export type ForgePlanTask = {
+  id: string;
+  phase: string;
+  name: string;
+  status: string;
+};
+
+export type ForgeWorkspacePlan = {
+  id: string;
+  title?: string | null;
+  goal: string;
+  phases: ForgePlanPhase[];
+  tasks: ForgePlanTask[];
+  currentTaskId: string | null;
+  planPath: string;
+  updatedAtMs: number;
+};
+
 export async function forgeListBundledTemplates(): Promise<ForgeBundledTemplateInfo[]> {
   try {
     return await invoke<ForgeBundledTemplateInfo[]>("forge_list_bundled_templates");
@@ -985,4 +1008,22 @@ export async function forgeInstallTemplate(
 
 export async function forgeUninstallTemplate(workspaceId: string): Promise<void> {
   await invoke("forge_uninstall_template", { workspaceId });
+}
+
+export async function forgeListPlans(workspaceId: string): Promise<ForgeWorkspacePlan[]> {
+  try {
+    return await invoke<ForgeWorkspacePlan[]>("forge_list_plans", { workspaceId });
+  } catch (error) {
+    if (isMissingTauriInvokeError(error)) {
+      console.warn(
+        "Tauri invoke bridge unavailable; returning empty forge plans list.",
+      );
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function forgeGetPlanPrompt(workspaceId: string): Promise<string> {
+  return invoke<string>("forge_get_plan_prompt", { workspaceId });
 }

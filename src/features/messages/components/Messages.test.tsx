@@ -1015,6 +1015,41 @@ describe("Messages", () => {
     expect(screen.queryByText("Plan ready")).toBeNull();
   });
 
+  it("offers an export action when provided and dismisses the follow-up after exporting", () => {
+    const onPlanAccept = vi.fn();
+    const onPlanExport = vi.fn();
+    const onPlanSubmitChanges = vi.fn();
+    const items: ConversationItem[] = [
+      {
+        id: "plan-export",
+        kind: "tool",
+        toolType: "plan",
+        title: "Plan",
+        detail: "completed",
+        status: "completed",
+        output: "Plan text",
+      },
+    ];
+
+    render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+        onPlanAccept={onPlanAccept}
+        onPlanExport={onPlanExport}
+        onPlanSubmitChanges={onPlanSubmitChanges}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save as plan.json" }));
+    expect(onPlanExport).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Plan ready")).toBeNull();
+  });
+
   it("does not render plan-ready tagged internal user messages", () => {
     const onPlanAccept = vi.fn();
     const onPlanSubmitChanges = vi.fn();

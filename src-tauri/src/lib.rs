@@ -218,6 +218,8 @@ pub fn run() {
             forge::forge_get_installed_template,
             forge::forge_install_template,
             forge::forge_uninstall_template,
+            forge::forge_list_plans,
+            forge::forge_get_plan_prompt,
             is_mobile_runtime
         ])
         .build(tauri::generate_context!())

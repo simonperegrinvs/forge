@@ -24,13 +24,17 @@ export function useCollaborationModeSelection({
       return null;
     }
 
+    const modelValue = (resolvedModel ?? selectedCollaborationMode.model ?? "").trim();
+    if (!modelValue) {
+      // CollaborationMode.settings.model is required by the app-server protocol.
+      // If we can't supply it, skip setting a collaborationMode override.
+      return null;
+    }
+
     const settings: Record<string, unknown> = {
       developer_instructions: selectedCollaborationMode.developerInstructions ?? null,
+      model: modelValue,
     };
-
-    if (resolvedModel) {
-      settings.model = resolvedModel;
-    }
 
     if (selectedEffort !== null) {
       settings.reasoning_effort = selectedEffort;

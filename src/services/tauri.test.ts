@@ -40,8 +40,10 @@ import {
   writeGlobalCodexConfigToml,
   writeAgentMd,
   forgeGetInstalledTemplate,
+  forgeGetPlanPrompt,
   forgeInstallTemplate,
   forgeListBundledTemplates,
+  forgeListPlans,
   forgeUninstallTemplate,
 } from "./tauri";
 
@@ -151,6 +153,40 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("forge_uninstall_template", {
       workspaceId: "ws-1",
     });
+  });
+
+  it("invokes forge plan wrappers", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: "alpha",
+        title: "Alpha",
+        goal: "Alpha goal",
+        phases: [],
+        tasks: [],
+        currentTaskId: null,
+        planPath: "plans/alpha.json",
+        updatedAtMs: 0,
+      },
+    ]);
+    invokeMock.mockResolvedValueOnce("# Mode: plan\n...");
+
+    await expect(forgeListPlans("ws-1")).resolves.toEqual([
+      {
+        id: "alpha",
+        title: "Alpha",
+        goal: "Alpha goal",
+        phases: [],
+        tasks: [],
+        currentTaskId: null,
+        planPath: "plans/alpha.json",
+        updatedAtMs: 0,
+      },
+    ]);
+    await expect(forgeGetPlanPrompt("ws-1")).resolves.toBe("# Mode: plan\n...");
+
+    expect(invokeMock).toHaveBeenCalledWith("forge_list_plans", { workspaceId: "ws-1" });
+    expect(invokeMock).toHaveBeenCalledWith("forge_get_plan_prompt", { workspaceId: "ws-1" });
   });
 
   it("returns fallbacks for forge wrappers when Tauri invoke bridge is missing", async () => {

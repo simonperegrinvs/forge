@@ -118,7 +118,12 @@ export function validatePlan(plan) {
     throw new Error(errors.join("\n"));
   }
 
-  expectNoExtraKeys(errors, plan, ["$schema", "id", "goal", "context", "phases", "tasks"], "plan");
+  expectNoExtraKeys(
+    errors,
+    plan,
+    ["$schema", "id", "title", "goal", "context", "phases", "tasks"],
+    "plan",
+  );
   if (plan.$schema !== "plan-v1") {
     pushError(errors, "plan.$schema", 'Expected "plan-v1"');
   }
@@ -126,6 +131,9 @@ export function validatePlan(plan) {
     maxLength: 64,
     pattern: PLAN_ID_RE,
   });
+  if (plan.title != null) {
+    expectString(errors, plan.title, "plan.title", { minLength: 3, maxLength: 80 });
+  }
   expectString(errors, plan.goal, "plan.goal", { minLength: 10, maxLength: 500 });
 
   if (!isPlainObject(plan.context)) {
@@ -384,4 +392,3 @@ export function validateStateAgainstPlan(state, plan) {
 
   return errors;
 }
-

@@ -2,11 +2,13 @@ import { useMemo, useState } from "react";
 
 type PlanReadyFollowupMessageProps = {
   onAccept: () => void;
+  onExport?: () => void;
   onSubmitChanges: (changes: string) => void;
 };
 
 export function PlanReadyFollowupMessage({
   onAccept,
+  onExport,
   onSubmitChanges,
 }: PlanReadyFollowupMessageProps) {
   const [changes, setChanges] = useState("");
@@ -25,7 +27,8 @@ export function PlanReadyFollowupMessage({
         <div className="request-user-input-body">
           <section className="request-user-input-question">
             <div className="request-user-input-question-text">
-              Start building from this plan, or describe changes to the plan.
+              Start building from this plan, export it to a plan file, or describe
+              changes to the plan.
             </div>
             <textarea
               className="request-user-input-notes"
@@ -51,6 +54,15 @@ export function PlanReadyFollowupMessage({
           >
             Send changes
           </button>
+          {onExport ? (
+            <button
+              type="button"
+              className="plan-ready-followup-export"
+              onClick={onExport}
+            >
+              Save as plan.json
+            </button>
+          ) : null}
           <button type="button" className="primary" onClick={onAccept}>
             Implement this plan
           </button>

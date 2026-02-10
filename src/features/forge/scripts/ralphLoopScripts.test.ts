@@ -8,6 +8,16 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 describe("ralph-loop template scripts", () => {
+  it("plan prompt does not include user_request or plan_id placeholders", async () => {
+    const templateRoot = path.resolve("src-tauri/resources/forge/templates/ralph-loop");
+    const planPrompt = await fs.readFile(path.join(templateRoot, "prompts", "plan.md"), "utf8");
+
+    expect(planPrompt).not.toContain("{{user_request}}");
+    expect(planPrompt).not.toContain("{{plan_id}}");
+    expect(planPrompt).toContain("Ready for your request.");
+    expect(planPrompt).toContain("@plan");
+  });
+
   it("post-plan initializes state and renders execute prompt; post-step updates prompt when complete", async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-ralph-loop-"));
     const workspaceRoot = tempRoot;
@@ -32,6 +42,7 @@ describe("ralph-loop template scripts", () => {
         {
           $schema: "plan-v1",
           id: planId,
+          title: "Ralph Loop Test",
           goal: "Test goal for ralph-loop plan generation",
           context: {
             tech_stack: ["Node.js"],
@@ -120,4 +131,3 @@ describe("ralph-loop template scripts", () => {
     expect(nextPrompt).toContain("All tasks completed");
   });
 });
-

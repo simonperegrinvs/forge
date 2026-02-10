@@ -1,5 +1,6 @@
 import type {
   AccountSnapshot,
+  CollaborationModeOption,
   RateLimitSnapshot,
   ThreadListSortKey,
   ThreadSummary,
@@ -67,6 +68,18 @@ type SidebarProps = {
   onRefreshAllThreads: () => void;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  activeWorkspace: WorkspaceInfo | null;
+  sendUserMessageToThread: (
+    workspace: WorkspaceInfo,
+    threadId: string,
+    message: string,
+    imageIds: string[],
+    options?: {
+      collaborationMode?: Record<string, unknown> | null;
+    },
+  ) => Promise<void>;
+  collaborationModes: CollaborationModeOption[];
+  onSelectCollaborationMode: (id: string | null) => void;
   accountRateLimits: RateLimitSnapshot | null;
   usageShowRemaining: boolean;
   accountInfo: AccountSnapshot | null;
@@ -123,6 +136,10 @@ export const Sidebar = memo(function Sidebar({
   onRefreshAllThreads,
   activeWorkspaceId,
   activeThreadId,
+  activeWorkspace,
+  sendUserMessageToThread,
+  collaborationModes,
+  onSelectCollaborationMode,
   accountRateLimits,
   usageShowRemaining,
   accountInfo,
@@ -490,7 +507,14 @@ export const Sidebar = memo(function Sidebar({
         ref={sidebarBodyRef}
       >
         {isForgeOpen ? (
-          <Forge activeWorkspaceId={activeWorkspaceId} />
+          <Forge
+            activeWorkspaceId={activeWorkspaceId}
+            activeWorkspace={activeWorkspace}
+            sendUserMessageToThread={sendUserMessageToThread}
+            onSelectThread={onSelectThread}
+            collaborationModes={collaborationModes}
+            onSelectCollaborationMode={onSelectCollaborationMode}
+          />
         ) : (
           <div className="workspace-list">
             {pinnedThreadRows.length > 0 && (

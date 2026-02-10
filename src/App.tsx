@@ -1620,7 +1620,7 @@ function MainApp() {
     ],
   );
 
-  const { handlePlanAccept, handlePlanSubmitChanges } = usePlanReadyActions({
+  const { handlePlanAccept, handlePlanExport, handlePlanSubmitChanges } = usePlanReadyActions({
     activeWorkspace,
     activeThreadId,
     collaborationModes,
@@ -1801,7 +1801,9 @@ function MainApp() {
     handleApprovalRemember,
     handleUserInputSubmit,
     onPlanAccept: handlePlanAccept,
+    onPlanExport: handlePlanExport,
     onPlanSubmitChanges: handlePlanSubmitChanges,
+    sendUserMessageToThread,
     onOpenSettings: () => openSettings(),
     onOpenDictationSettings: () => openSettings("dictation"),
     onOpenDebug: handleDebugClick,

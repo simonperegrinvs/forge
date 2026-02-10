@@ -157,11 +157,128 @@ pub(crate) fn read_installed_template_lock_core(
     Ok(Some(parsed))
 }
 
+pub(crate) fn read_installed_template_plan_prompt_core(
+    workspace_root: &Path,
+) -> Result<String, String> {
+    let lock = read_installed_template_lock_core(workspace_root)?
+        .ok_or_else(|| "No Forge template installed.".to_string())?;
+
+    let template_root = workspace_root
+        .join(".agent")
+        .join("templates")
+        .join(&lock.installed_template_id);
+    if !template_root.is_dir() {
+        return Err("Installed Forge template folder is missing.".to_string());
+    }
+
+    let manifest = read_manifest(&template_root)?;
+    let plan_prompt_rel = validate_relative_file_path(&manifest.entrypoints.plan_prompt)?;
+    let prompt_path = template_root.join(plan_prompt_rel);
+    let raw = fs::read_to_string(&prompt_path).map_err(|err| err.to_string())?;
+    Ok(normalize_plan_prompt(&raw))
+}
+
+fn normalize_plan_prompt(prompt: &str) -> String {
+    let mut out = prompt.to_string();
+
+    // Keep current repo conventions: skills live in `.agents/skills`, not `.agent/skills`.
+    out = out.replace(".agent/skills/", ".agents/skills/");
+
+    // Align file output with Forge's nested plan directory structure.
+    out = out.replace("plans/<plan_id>.json", "plans/<plan_id>/plan.json");
+    out = out.replace("plans/<plan-id>.json", "plans/<plan-id>/plan.json");
+
+    // Plan collaboration mode forbids mutating actions like writing files. Older template versions
+    // asked the agent to write plan.json directly. If we detect that, rewrite the output section
+    // to be plan-mode compatible (output JSON in <proposed_plan>, export happens later).
+    let looks_like_file_write_prompt = out.contains("After writing the file")
+        || out.contains("Create `plans/<plan_id>")
+        || out.contains("Path: plans/<plan_id>");
+    if looks_like_file_write_prompt && out.contains("## Output") {
+        let before = out
+            .split("## Output")
+            .next()
+            .unwrap_or("")
+            .trim_end_matches('\n');
+        out = format!(
+            "{before}\n\n## Output\n\n- Choose a `plan_id` slug matching `^[a-z0-9][a-z0-9-]*[a-z0-9]$` (max 64 chars).\n- Output the plan as the exact `plan-v1` JSON object inside a single `<proposed_plan>...</proposed_plan>` block.\n- Do NOT write any files yet.\n\nInside the JSON, include:\n\n- `\"$schema\": \"plan-v1\"`\n- `\"id\": \"<plan_id>\"`\n- `\"title\": \"<short title>\"`\n\n## Hard requirement\n\nDo NOT implement the plan. Stop after outputting the `<proposed_plan>` block.\n"
+        );
+    }
+
+    // Ensure the `@plan` skill is explicitly loaded.
+    let mut lines = out.lines();
+    let mut seen_first = false;
+    let mut first_non_empty: Option<String> = None;
+    for line in &mut lines {
+        seen_first = true;
+        if !line.trim().is_empty() {
+            first_non_empty = Some(line.trim().to_string());
+            break;
+        }
+    }
+
+    if seen_first {
+        if first_non_empty.as_deref() != Some("@plan") {
+            out = format!("@plan\n\n{out}");
+        }
+    } else {
+        out = "@plan\n".to_string();
+    }
+
+    out
+}
+
 fn copy_file(src: &Path, dest: &Path) -> Result<(), String> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
     fs::copy(src, dest).map_err(|err| err.to_string())?;
+    Ok(())
+}
+
+fn walk_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|err| err.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|err| err.to_string())?;
+        let path = entry.path();
+        let meta = fs::metadata(&path).map_err(|err| err.to_string())?;
+        if meta.is_dir() {
+            walk_files_recursive(&path, out)?;
+        } else if meta.is_file() {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// Best-effort: mirror Forge template skills into Codex's repository skill directory.
+///
+/// Forge templates install skills into `.agent/skills/*` (CodexMonitor internal). Codex discovers
+/// repo-scoped skills under `.agents/skills/*` (note the plural `.agents`). This sync step bridges
+/// those two layouts so skills are visible to Codex (e.g. `skills/list` and `@skill` resolution).
+///
+/// This does not overwrite existing files in `.agents/skills`.
+pub(crate) fn sync_agent_skills_into_repo_agents_dir_core(workspace_root: &Path) -> Result<(), String> {
+    let agent_skills_root = workspace_root.join(".agent").join("skills");
+    if !agent_skills_root.is_dir() {
+        return Ok(());
+    }
+
+    let mut files: Vec<PathBuf> = Vec::new();
+    walk_files_recursive(&agent_skills_root, &mut files)?;
+
+    let codex_skills_root = workspace_root.join(".agents").join("skills");
+    for src_path in files {
+        let rel = src_path
+            .strip_prefix(&agent_skills_root)
+            .map_err(|_| "Invalid .agent/skills file path.".to_string())?;
+        let dest_path = codex_skills_root.join(rel);
+        if dest_path.exists() {
+            continue;
+        }
+        copy_file(&src_path, &dest_path)?;
+    }
+
     Ok(())
 }
 
@@ -688,5 +805,43 @@ mod tests {
             install_bundled_template_core(&templates, &workspace, "does-not-exist").unwrap_err();
         assert!(err.contains("Bundled template not found"));
         let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn read_installed_template_plan_prompt_reads_prompt_from_installed_template() {
+        let templates = templates_root();
+        let workspace = temp_workspace_root();
+
+        install_bundled_template_core(&templates, &workspace, "ralph-loop").expect("install");
+
+        let prompt = read_installed_template_plan_prompt_core(&workspace).expect("read prompt");
+        assert!(prompt.contains("# Mode: plan"));
+        assert!(prompt.contains("Two-step flow"));
+
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn normalize_plan_prompt_rewrites_legacy_file_write_instructions_for_plan_mode() {
+        let legacy = r#"
+# Mode: plan
+
+## Output
+
+- Choose a `plan_id` slug matching `^[a-z0-9][a-z0-9-]*[a-z0-9]$` (max 64 chars).
+- Create `plans/<plan_id>.json` (create the `plans/` folder if needed).
+
+After writing the file, respond with:
+
+- `Plan ID: <plan_id>`
+- `Path: plans/<plan_id>.json`
+"#;
+
+        let normalized = normalize_plan_prompt(legacy);
+        assert!(normalized.contains("@plan"));
+        assert!(normalized.contains("<proposed_plan>"));
+        assert!(normalized.contains("Do NOT write any files yet."));
+        assert!(!normalized.contains("After writing the file"));
+        assert!(!normalized.contains("Path: plans/<plan_id>.json"));
     }
 }
