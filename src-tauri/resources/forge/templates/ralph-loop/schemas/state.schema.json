@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "State",
+  "description": "Execution progress tracking for a development plan",
+  "type": "object",
+  "required": ["$schema", "plan_id", "iteration", "summary", "current_task", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "state-v1"
+    },
+    "plan_id": {
+      "type": "string",
+      "description": "Must match the id field in plan.json"
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Incremented by the orchestrator before each LLM call"
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "Cumulative progress summary for context continuity"
+    },
+    "current_task": {
+      "type": ["string", "null"],
+      "description": "Task ID in progress, or null if idle/complete"
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "attempts", "notes"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^task-[0-9]+-[0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "blocked", "failed"]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of iterations that have worked on this task"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "What was done, decisions made, or why it failed/blocked"
+          }
+        }
+      }
+    }
+  }
+}
+

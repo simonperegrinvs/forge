@@ -23,6 +23,7 @@
     "codemod:ds": "npm run codemod:modal-shell && npm run codemod:panel-shell && npm run codemod:toast-shell",
     "test": "vitest run",
     "test:watch": "vitest",
+    "coverage:rust:forge-templates": "bash scripts/coverage-forge-templates-rust.sh",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",

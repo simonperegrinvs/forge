@@ -490,7 +490,7 @@ export const Sidebar = memo(function Sidebar({
         ref={sidebarBodyRef}
       >
         {isForgeOpen ? (
-          <Forge />
+          <Forge activeWorkspaceId={activeWorkspaceId} />
         ) : (
           <div className="workspace-list">
             {pinnedThreadRows.length > 0 && (

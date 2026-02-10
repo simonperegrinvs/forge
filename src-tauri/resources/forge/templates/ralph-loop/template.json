@@ -1,0 +1,40 @@
+{
+  "schema": "forge-template-v1",
+  "id": "ralph-loop",
+  "title": "Ralph Loop",
+  "version": "0.1.0",
+  "files": [
+    "template.json",
+    "phases.json",
+    "prompts/plan.md",
+    "prompts/execute.md",
+    "skills/plan/SKILL.md",
+    "skills/plan/references/plan-schema.md",
+    "schemas/plan.schema.json",
+    "schemas/state.schema.json",
+    "scripts/post-plan.mjs",
+    "scripts/pre-execute.mjs",
+    "scripts/post-step.mjs",
+    "scripts/lib/args.mjs",
+    "scripts/lib/context.mjs",
+    "scripts/lib/execute.mjs",
+    "scripts/lib/markdown.mjs",
+    "scripts/lib/plan.mjs",
+    "scripts/lib/render.mjs",
+    "scripts/lib/state.mjs"
+  ],
+  "entrypoints": {
+    "phases": "phases.json",
+    "planPrompt": "prompts/plan.md",
+    "executePrompt": "prompts/execute.md",
+    "planSchema": "schemas/plan.schema.json",
+    "stateSchema": "schemas/state.schema.json",
+    "requiredSkills": ["plan"],
+    "hooks": {
+      "postPlan": "scripts/post-plan.mjs",
+      "preExecute": "scripts/pre-execute.mjs",
+      "postStep": "scripts/post-step.mjs"
+    }
+  }
+}
+

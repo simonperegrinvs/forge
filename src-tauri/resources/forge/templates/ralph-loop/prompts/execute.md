@@ -1,0 +1,63 @@
+# Mode: execute
+
+You are executing a single task from a development plan. Your context is cleared
+between iterations - everything you need is below.
+
+---
+
+## Plan
+
+**Goal:** {{goal}}
+**Tech Stack:** {{tech_stack}}
+**Constraints:**
+{{constraints}}
+
+## Progress (iteration {{iteration}})
+
+{{summary}}
+
+## All tasks
+
+{{task_list}}
+
+## Learnings from previous iterations
+
+{{progress_notes}}
+
+---
+
+## YOUR TASK: {{current_task_id}} - {{current_task_name}}
+
+{{current_task_description}}
+
+**Files:** {{current_task_files}}
+
+**Verification:**
+{{current_task_verification}}
+
+**Attempts so far:** {{current_task_attempts}}
+{{current_task_previous_notes}}
+
+**What dependencies produced:**
+{{dependency_notes}}
+
+---
+
+## After implementation - update state
+
+Update `plans/{{plan_id}}/state.json` following these rules:
+
+1. Set your task's `status` to `completed` (or `failed` if truly stuck after multiple attempts)
+2. Write `notes` explaining what you did - file paths, decisions, config values. The next
+   iteration has no memory of you; these notes are its only link to your work.
+3. Update `summary` - orient a newcomer: what's done, what's next (max 300 chars)
+4. Increment your task's `attempts` count
+5. Do NOT change any other task's status
+6. Do NOT modify `plan.json` - it is immutable
+
+If you learned something useful beyond this task (a gotcha, a project convention,
+a tool quirk), append a one-liner to `plans/{{plan_id}}/progress.md`:
+
+```text
+- {{date}} iter {{iteration}}: <what you learned>
+```

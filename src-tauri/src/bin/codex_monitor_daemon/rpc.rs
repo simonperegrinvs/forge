@@ -272,6 +272,28 @@ pub(super) async fn handle_rpc_request(
                 .await?;
             serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
         }
+        "forge_list_bundled_templates" => {
+            let templates = state.forge_list_bundled_templates().await?;
+            serde_json::to_value(templates).map_err(|err| err.to_string())
+        }
+        "forge_get_installed_template" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let installed = state.forge_get_installed_template(workspace_id).await?;
+            serde_json::to_value(installed).map_err(|err| err.to_string())
+        }
+        "forge_install_template" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let template_id = parse_string(&params, "templateId")?;
+            let installed = state
+                .forge_install_template(workspace_id, template_id)
+                .await?;
+            serde_json::to_value(installed).map_err(|err| err.to_string())
+        }
+        "forge_uninstall_template" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.forge_uninstall_template(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
         "get_app_settings" => {
             let settings = state.get_app_settings().await;
             serde_json::to_value(settings).map_err(|err| err.to_string())

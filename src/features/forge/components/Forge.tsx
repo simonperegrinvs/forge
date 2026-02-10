@@ -6,7 +6,7 @@ import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import LayoutTemplate from "lucide-react/dist/esm/icons/layout-template";
 import Pause from "lucide-react/dist/esm/icons/pause";
 import Play from "lucide-react/dist/esm/icons/play";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ModalShell } from "../../design-system/components/modal/ModalShell";
 import { MaterialSymbol } from "../../design-system/components/icons/MaterialSymbol";
 import {
@@ -14,6 +14,28 @@ import {
   PopoverSurface,
 } from "../../design-system/components/popover/PopoverPrimitives";
 import { useDismissibleMenu } from "../../app/hooks/useDismissibleMenu";
+import {
+  forgeGetInstalledTemplate,
+  forgeInstallTemplate,
+  forgeListBundledTemplates,
+  forgeUninstallTemplate,
+  type ForgeBundledTemplateInfo,
+  type ForgeTemplateLock,
+} from "../../../services/tauri";
+
+export type ForgeTemplatesClient = {
+  listBundledTemplates: () => Promise<ForgeBundledTemplateInfo[]>;
+  getInstalledTemplate: (workspaceId: string) => Promise<ForgeTemplateLock | null>;
+  installTemplate: (workspaceId: string, templateId: string) => Promise<ForgeTemplateLock>;
+  uninstallTemplate: (workspaceId: string) => Promise<void>;
+};
+
+const defaultForgeTemplatesClient: ForgeTemplatesClient = {
+  listBundledTemplates: forgeListBundledTemplates,
+  getInstalledTemplate: forgeGetInstalledTemplate,
+  installTemplate: forgeInstallTemplate,
+  uninstallTemplate: forgeUninstallTemplate,
+};
 
 type ForgePhase = {
   name: string;
@@ -34,11 +56,6 @@ type ForgePlan = {
   name: string;
   phases: ForgePhase[];
   items: ForgePlanItem[];
-};
-
-type ForgeTemplate = {
-  id: string;
-  name: string;
 };
 
 function PhaseRow({
@@ -74,11 +91,17 @@ function PhaseRow({
 
 function ForgeTemplatesModal({
   templates,
-  installedTemplateId,
+  installedTemplate,
+  canManage,
+  onInstallTemplate,
+  onUninstallTemplate,
   onClose,
 }: {
-  templates: ForgeTemplate[];
-  installedTemplateId: string | null;
+  templates: ForgeBundledTemplateInfo[];
+  installedTemplate: ForgeTemplateLock | null;
+  canManage: boolean;
+  onInstallTemplate: (templateId: string) => void;
+  onUninstallTemplate: () => void;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -93,10 +116,16 @@ function ForgeTemplatesModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const installed = installedTemplateId
-    ? templates.find((t) => t.id === installedTemplateId) ?? null
+  const installed = installedTemplate
+    ? templates.find((t) => t.id === installedTemplate.installedTemplateId) ?? {
+        id: installedTemplate.installedTemplateId,
+        title: installedTemplate.installedTemplateId,
+        version: installedTemplate.installedTemplateVersion,
+      }
     : null;
-  const others = templates.filter((t) => t.id !== installedTemplateId);
+  const others = installed
+    ? templates.filter((t) => t.id !== installed.id)
+    : templates;
 
   return (
     <ModalShell
@@ -113,8 +142,10 @@ function ForgeTemplatesModal({
         {installed ? (
           <div className="forge-template-row" role="listitem">
             <div className="forge-template-main">
-              <div className="forge-template-name">{installed.name}</div>
-              <div className="forge-template-meta">Installed</div>
+              <div className="forge-template-name">{installed.title}</div>
+              <div className="forge-template-meta">
+                Installed{installed.version ? ` (${installed.version})` : ""}
+              </div>
             </div>
             <div className="forge-template-actions">
               <button
@@ -132,8 +163,10 @@ function ForgeTemplatesModal({
                 type="button"
                 className="ghost forge-template-action"
                 onClick={() => {
-                  // TODO(Forge): wire template remove
+                  onUninstallTemplate();
+                  onClose();
                 }}
+                disabled={!canManage}
               >
                 Remove
               </button>
@@ -148,15 +181,17 @@ function ForgeTemplatesModal({
           return (
             <div key={template.id} className="forge-template-row" role="listitem">
               <div className="forge-template-main">
-                <div className="forge-template-name">{template.name}</div>
+                <div className="forge-template-name">{template.title}</div>
               </div>
               <div className="forge-template-actions">
                 <button
                   type="button"
                   className="ghost forge-template-action"
                   onClick={() => {
-                    // TODO(Forge): wire template install/swap
+                    onInstallTemplate(template.id);
+                    onClose();
                   }}
+                  disabled={!canManage}
                 >
                   {actionLabel}
                 </button>
@@ -174,7 +209,91 @@ function ForgeTemplatesModal({
   );
 }
 
-export function Forge() {
+export function Forge({
+  activeWorkspaceId,
+  templatesClient,
+}: {
+  activeWorkspaceId: string | null;
+  templatesClient?: ForgeTemplatesClient;
+}) {
+  const client = templatesClient ?? defaultForgeTemplatesClient;
+  const listBundledTemplates = client.listBundledTemplates;
+  const getInstalledTemplate = client.getInstalledTemplate;
+  const installTemplate = client.installTemplate;
+  const uninstallTemplate = client.uninstallTemplate;
+
+  const [templates, setTemplates] = useState<ForgeBundledTemplateInfo[]>([]);
+  const [installedTemplate, setInstalledTemplate] = useState<ForgeTemplateLock | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listBundledTemplates()
+      .then((items) => {
+        if (cancelled) {
+          return;
+        }
+        setTemplates(items);
+      })
+      .catch((error) => {
+        console.warn("Failed to load Forge templates.", { error });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listBundledTemplates]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeWorkspaceId) {
+      setInstalledTemplate(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    void getInstalledTemplate(activeWorkspaceId)
+      .then((installed) => {
+        if (cancelled) {
+          return;
+        }
+        setInstalledTemplate(installed);
+      })
+      .catch((error) => {
+        console.warn("Failed to load installed Forge template.", { error });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, getInstalledTemplate]);
+
+  const handleInstallTemplate = useCallback(
+    (templateId: string) => {
+      if (!activeWorkspaceId) {
+        return;
+      }
+      void installTemplate(activeWorkspaceId, templateId)
+        .then((lock) => {
+          setInstalledTemplate(lock);
+        })
+        .catch((error) => {
+          console.warn("Failed to install Forge template.", { error });
+        });
+    },
+    [activeWorkspaceId, installTemplate],
+  );
+
+  const handleUninstallTemplate = useCallback(() => {
+    if (!activeWorkspaceId) {
+      return;
+    }
+    void uninstallTemplate(activeWorkspaceId)
+      .then(() => {
+        setInstalledTemplate(null);
+      })
+      .catch((error) => {
+        console.warn("Failed to uninstall Forge template.", { error });
+      });
+  }, [activeWorkspaceId, uninstallTemplate]);
+
   const plans: ForgePlan[] = useMemo(
     () => [
       {
@@ -224,15 +343,6 @@ export function Forge() {
     [],
   );
 
-  const templates: ForgeTemplate[] = useMemo(
-    () => [
-      { id: "tpl-default", name: "Default" },
-      { id: "tpl-react", name: "React feature slice" },
-      { id: "tpl-rust", name: "Rust core + adapters" },
-    ],
-    [],
-  );
-
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const selectedPlan = selectedPlanId
     ? plans.find((p) => p.id === selectedPlanId) ?? null
@@ -242,7 +352,6 @@ export function Forge() {
   const planMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  const installedTemplateId = "tpl-default";
   const [isExecuting, setIsExecuting] = useState(false);
 
   useDismissibleMenu({
@@ -413,7 +522,10 @@ export function Forge() {
       {templatesOpen && (
         <ForgeTemplatesModal
           templates={templates}
-          installedTemplateId={installedTemplateId}
+          installedTemplate={installedTemplate}
+          canManage={Boolean(activeWorkspaceId)}
+          onInstallTemplate={handleInstallTemplate}
+          onUninstallTemplate={handleUninstallTemplate}
           onClose={() => setTemplatesOpen(false)}
         />
       )}

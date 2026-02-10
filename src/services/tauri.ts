@@ -929,3 +929,60 @@ export async function sendNotification(
 
   await attemptFallback();
 }
+
+export type ForgeBundledTemplateInfo = {
+  id: string;
+  title: string;
+  version: string;
+};
+
+export type ForgeTemplateLock = {
+  schema: string;
+  installedTemplateId: string;
+  installedTemplateVersion: string;
+  installedAtIso: string;
+  installedFiles: string[];
+};
+
+export async function forgeListBundledTemplates(): Promise<ForgeBundledTemplateInfo[]> {
+  try {
+    return await invoke<ForgeBundledTemplateInfo[]>("forge_list_bundled_templates");
+  } catch (error) {
+    if (isMissingTauriInvokeError(error)) {
+      console.warn(
+        "Tauri invoke bridge unavailable; returning empty bundled forge templates list.",
+      );
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function forgeGetInstalledTemplate(
+  workspaceId: string,
+): Promise<ForgeTemplateLock | null> {
+  try {
+    return await invoke<ForgeTemplateLock | null>("forge_get_installed_template", {
+      workspaceId,
+    });
+  } catch (error) {
+    if (isMissingTauriInvokeError(error)) {
+      console.warn(
+        "Tauri invoke bridge unavailable; returning null installed forge template.",
+      );
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function forgeInstallTemplate(
+  workspaceId: string,
+  templateId: string,
+): Promise<ForgeTemplateLock> {
+  return invoke<ForgeTemplateLock>("forge_install_template", { workspaceId, templateId });
+}
+
+export async function forgeUninstallTemplate(workspaceId: string): Promise<void> {
+  await invoke("forge_uninstall_template", { workspaceId });
+}

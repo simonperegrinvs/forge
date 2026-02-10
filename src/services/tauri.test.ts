@@ -39,6 +39,10 @@ import {
   writeGlobalAgentsMd,
   writeGlobalCodexConfigToml,
   writeAgentMd,
+  forgeGetInstalledTemplate,
+  forgeInstallTemplate,
+  forgeListBundledTemplates,
+  forgeUninstallTemplate,
 } from "./tauri";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -112,6 +116,54 @@ describe("tauri invoke wrappers", () => {
 
     await expect(listWorkspaces()).resolves.toEqual([]);
     expect(invokeMock).toHaveBeenCalledWith("list_workspaces");
+  });
+
+  it("invokes forge template wrappers", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce([{ id: "ralph-loop", title: "Ralph Loop", version: "0.1.0" }]);
+    invokeMock.mockResolvedValueOnce(null);
+    invokeMock.mockResolvedValueOnce({
+      schema: "forge-template-lock-v1",
+      installedTemplateId: "ralph-loop",
+      installedTemplateVersion: "0.1.0",
+      installedAtIso: "2026-02-10T00:00:00Z",
+      installedFiles: ["template.json"],
+    });
+    invokeMock.mockResolvedValueOnce({ ok: true });
+
+    await expect(forgeListBundledTemplates()).resolves.toEqual([
+      { id: "ralph-loop", title: "Ralph Loop", version: "0.1.0" },
+    ]);
+    await expect(forgeGetInstalledTemplate("ws-1")).resolves.toBeNull();
+    await expect(forgeInstallTemplate("ws-1", "ralph-loop")).resolves.toMatchObject({
+      installedTemplateId: "ralph-loop",
+    });
+    await expect(forgeUninstallTemplate("ws-1")).resolves.toBeUndefined();
+
+    expect(invokeMock).toHaveBeenCalledWith("forge_list_bundled_templates");
+    expect(invokeMock).toHaveBeenCalledWith("forge_get_installed_template", {
+      workspaceId: "ws-1",
+    });
+    expect(invokeMock).toHaveBeenCalledWith("forge_install_template", {
+      workspaceId: "ws-1",
+      templateId: "ralph-loop",
+    });
+    expect(invokeMock).toHaveBeenCalledWith("forge_uninstall_template", {
+      workspaceId: "ws-1",
+    });
+  });
+
+  it("returns fallbacks for forge wrappers when Tauri invoke bridge is missing", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockRejectedValueOnce(
+      new TypeError("Cannot read properties of undefined (reading 'invoke')"),
+    );
+    invokeMock.mockRejectedValueOnce(
+      new TypeError("Cannot read properties of undefined (reading 'invoke')"),
+    );
+
+    await expect(forgeListBundledTemplates()).resolves.toEqual([]);
+    await expect(forgeGetInstalledTemplate("ws-1")).resolves.toBeNull();
   });
 
   it("applies default limit for git log", async () => {

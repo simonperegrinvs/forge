@@ -39,6 +39,9 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "resources": [
+      "resources/**/*"
+    ],
     "iOS": {
       "frameworks": [
         "libz.tbd",

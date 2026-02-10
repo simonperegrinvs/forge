@@ -8,6 +8,7 @@ mod daemon_binary;
 mod dictation;
 mod event_sink;
 mod files;
+mod forge;
 mod git;
 mod git_utils;
 mod local_usage;
@@ -213,6 +214,10 @@ pub fn run() {
             tailscale::tailscale_daemon_start,
             tailscale::tailscale_daemon_stop,
             tailscale::tailscale_daemon_status,
+            forge::forge_list_bundled_templates,
+            forge::forge_get_installed_template,
+            forge::forge_install_template,
+            forge::forge_uninstall_template,
             is_mobile_runtime
         ])
         .build(tauri::generate_context!())

@@ -3,6 +3,7 @@ pub(crate) mod codex_aux_core;
 pub(crate) mod codex_update_core;
 pub(crate) mod codex_core;
 pub(crate) mod files_core;
+pub(crate) mod forge_templates_core;
 pub(crate) mod git_core;
 pub(crate) mod git_ui_core;
 pub(crate) mod local_usage_core;

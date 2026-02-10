@@ -1,0 +1,12 @@
+{
+  "schema": "forge-phases-v1",
+  "phases": [
+    {
+      "id": "implementation",
+      "title": "Implementation",
+      "iconId": "code_blocks",
+      "order": 1
+    }
+  ]
+}
+
