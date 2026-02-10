@@ -56,29 +56,18 @@ function expectArrayOfStrings(errors, value, path, { minItems } = {}) {
 }
 
 const PLAN_ID_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
-const PHASE_ID_RE = /^phase-[0-9]+$/;
-const TASK_ID_RE = /^task-[0-9]+-[0-9]+$/;
+const TASK_ID_RE = /^task-[0-9]+$/;
 
-function parsePhaseNumber(phaseId) {
-  const match = /^phase-([0-9]+)$/.exec(phaseId);
+function parseTaskNumber(taskId) {
+  const match = /^task-([0-9]+)$/.exec(taskId);
   if (!match) {
     return null;
   }
   const value = Number(match[1]);
-  return Number.isInteger(value) ? value : null;
-}
-
-function parseTaskId(taskId) {
-  const match = /^task-([0-9]+)-([0-9]+)$/.exec(taskId);
-  if (!match) {
+  if (!Number.isInteger(value) || value < 1) {
     return null;
   }
-  const phaseNumber = Number(match[1]);
-  const seq = Number(match[2]);
-  if (!Number.isInteger(phaseNumber) || !Number.isInteger(seq)) {
-    return null;
-  }
-  return { phaseNumber, seq };
+  return value;
 }
 
 function validateDag(errors, tasksById) {
@@ -121,7 +110,7 @@ export function validatePlan(plan) {
   expectNoExtraKeys(
     errors,
     plan,
-    ["$schema", "id", "title", "goal", "context", "phases", "tasks"],
+    ["$schema", "id", "title", "goal", "context", "tasks"],
     "plan",
   );
   if (plan.$schema !== "plan-v1") {
@@ -160,50 +149,8 @@ export function validatePlan(plan) {
     }
   }
 
-  expectArray(errors, plan.phases, "plan.phases", { minItems: 1 });
-  const phaseIds = new Set();
-  const phaseNumbers = [];
-  if (Array.isArray(plan.phases)) {
-    for (let i = 0; i < plan.phases.length; i++) {
-      const phase = plan.phases[i];
-      const phasePath = `plan.phases[${i}]`;
-      if (!isPlainObject(phase)) {
-        pushError(errors, phasePath, "Expected object");
-        continue;
-      }
-      expectNoExtraKeys(errors, phase, ["id", "title", "description"], phasePath);
-      expectString(errors, phase.id, `${phasePath}.id`, { pattern: PHASE_ID_RE });
-      expectString(errors, phase.title, `${phasePath}.title`, { maxLength: 50 });
-      expectString(errors, phase.description, `${phasePath}.description`, { maxLength: 200 });
-      if (typeof phase.id === "string") {
-        if (phaseIds.has(phase.id)) {
-          pushError(errors, `${phasePath}.id`, `Duplicate phase id: ${phase.id}`);
-        } else {
-          phaseIds.add(phase.id);
-        }
-        const n = parsePhaseNumber(phase.id);
-        if (n != null) {
-          phaseNumbers.push(n);
-        }
-      }
-    }
-  }
-
-  // Enforce sequential phase ids (phase-1..phase-n).
-  if (phaseNumbers.length > 0) {
-    const sorted = [...new Set(phaseNumbers)].sort((a, b) => a - b);
-    for (let i = 0; i < sorted.length; i++) {
-      const expected = i + 1;
-      if (sorted[i] !== expected) {
-        pushError(errors, "plan.phases", `Phase ids must be sequential (missing phase-${expected})`);
-        break;
-      }
-    }
-  }
-
   expectArray(errors, plan.tasks, "plan.tasks", { minItems: 1 });
   const tasksById = new Map();
-  const tasksByPhase = new Map();
   let hasEntryPoint = false;
 
   if (Array.isArray(plan.tasks)) {
@@ -217,12 +164,11 @@ export function validatePlan(plan) {
       expectNoExtraKeys(
         errors,
         task,
-        ["id", "phase", "name", "description", "depends_on", "files", "verification"],
+        ["id", "name", "description", "depends_on", "files", "verification"],
         taskPath,
       );
 
       expectString(errors, task.id, `${taskPath}.id`, { pattern: TASK_ID_RE });
-      expectString(errors, task.phase, `${taskPath}.phase`, { pattern: PHASE_ID_RE });
       expectString(errors, task.name, `${taskPath}.name`, { maxLength: 80 });
       expectString(errors, task.description, `${taskPath}.description`, { minLength: 20 });
       expectArrayOfStrings(errors, task.depends_on, `${taskPath}.depends_on`);
@@ -239,25 +185,12 @@ export function validatePlan(plan) {
         } else {
           tasksById.set(task.id, task);
         }
-        const parsed = parseTaskId(task.id);
-        if (parsed) {
-          const list = tasksByPhase.get(parsed.phaseNumber) ?? [];
-          list.push(parsed.seq);
-          tasksByPhase.set(parsed.phaseNumber, list);
-        }
-      }
-
-      if (typeof task.phase === "string" && !phaseIds.has(task.phase)) {
-        pushError(errors, `${taskPath}.phase`, `Unknown phase id: ${task.phase}`);
-      }
-
-      if (typeof task.id === "string" && typeof task.phase === "string") {
-        const parsed = parseTaskId(task.id);
-        if (parsed) {
-          const expectedPhase = `phase-${parsed.phaseNumber}`;
-          if (task.phase !== expectedPhase) {
-            pushError(errors, `${taskPath}.phase`, `Task id implies ${expectedPhase} but got ${task.phase}`);
-          }
+        const taskNumber = parseTaskNumber(task.id);
+        const expectedId = `task-${i + 1}`;
+        if (taskNumber == null) {
+          pushError(errors, `${taskPath}.id`, "Task id must be task-<n> with n >= 1");
+        } else if (task.id !== expectedId) {
+          pushError(errors, `${taskPath}.id`, `Task ids must match array order (expected ${expectedId})`);
         }
       }
     }
@@ -275,18 +208,6 @@ export function validatePlan(plan) {
         pushError(errors, `task:${id}.depends_on`, "Task cannot depend on itself");
       } else if (!tasksById.has(dep)) {
         pushError(errors, `task:${id}.depends_on`, `Unknown dependency: ${dep}`);
-      }
-    }
-  }
-
-  // Task sequences should be sequential per phase (task-2-1..task-2-k).
-  for (const [phaseNumber, seqs] of tasksByPhase.entries()) {
-    const sorted = [...new Set(seqs)].sort((a, b) => a - b);
-    for (let i = 0; i < sorted.length; i++) {
-      const expected = i + 1;
-      if (sorted[i] !== expected) {
-        pushError(errors, "plan.tasks", `Task sequences must be sequential for phase ${phaseNumber} (missing task-${phaseNumber}-${expected})`);
-        break;
       }
     }
   }

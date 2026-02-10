@@ -48,17 +48,9 @@ describe("ralph-loop template scripts", () => {
             tech_stack: ["Node.js"],
             constraints: ["Do NOT add unrelated features."],
           },
-          phases: [
-            {
-              id: "phase-1",
-              title: "Phase 1",
-              description: "Test phase.",
-            },
-          ],
           tasks: [
             {
-              id: "task-1-1",
-              phase: "phase-1",
+              id: "task-1",
               name: "Test task",
               description: "Implement something specific for test coverage.",
               depends_on: [],
@@ -96,7 +88,7 @@ describe("ralph-loop template scripts", () => {
     expect(state.plan_id).toBe(planId);
     expect(state.iteration).toBe(0);
     expect(state.tasks).toHaveLength(1);
-    expect(state.tasks[0]).toMatchObject({ id: "task-1-1", status: "pending", attempts: 0 });
+    expect(state.tasks[0]).toMatchObject({ id: "task-1", status: "pending", attempts: 0 });
 
     const progress = await fs.readFile(progressPath, "utf8");
     expect(progress).toBe("");
@@ -106,7 +98,7 @@ describe("ralph-loop template scripts", () => {
 
     const executePrompt = await fs.readFile(generatedExecutePromptPath, "utf8");
     expect(executePrompt).toContain(`plans/${planId}/state.json`);
-    expect(executePrompt).toContain("YOUR TASK: task-1-1");
+    expect(executePrompt).toContain("YOUR TASK: task-1");
 
     // Pre-execute should pass when the required skill exists in the workspace.
     const skillDest = path.join(workspaceRoot, ".agent", "skills", "plan", "SKILL.md");

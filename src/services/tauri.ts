@@ -944,14 +944,8 @@ export type ForgeTemplateLock = {
   installedFiles: string[];
 };
 
-export type ForgePlanPhase = {
-  id: string;
-  title: string;
-};
-
 export type ForgePlanTask = {
   id: string;
-  phase: string;
   name: string;
   status: string;
 };
@@ -960,7 +954,6 @@ export type ForgeWorkspacePlan = {
   id: string;
   title?: string | null;
   goal: string;
-  phases: ForgePlanPhase[];
   tasks: ForgePlanTask[];
   currentTaskId: string | null;
   planPath: string;

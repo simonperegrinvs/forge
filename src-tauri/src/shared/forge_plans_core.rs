@@ -7,16 +7,8 @@ use std::time::SystemTime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ForgePlanPhaseV1 {
-    pub(crate) id: String,
-    pub(crate) title: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct ForgePlanTaskV1 {
     pub(crate) id: String,
-    pub(crate) phase: String,
     pub(crate) name: String,
     pub(crate) status: String,
 }
@@ -28,7 +20,6 @@ pub(crate) struct ForgeWorkspacePlanV1 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) title: Option<String>,
     pub(crate) goal: String,
-    pub(crate) phases: Vec<ForgePlanPhaseV1>,
     pub(crate) tasks: Vec<ForgePlanTaskV1>,
     pub(crate) current_task_id: Option<String>,
     pub(crate) plan_path: String,
@@ -37,26 +28,16 @@ pub(crate) struct ForgeWorkspacePlanV1 {
 
 #[derive(Debug, Clone, Deserialize)]
 struct PlanV1 {
-    #[serde(rename = "$schema")]
-    schema: String,
     id: String,
     #[serde(default)]
     title: Option<String>,
     goal: String,
-    phases: Vec<PlanPhaseV1>,
     tasks: Vec<PlanTaskV1>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct PlanPhaseV1 {
-    id: String,
-    title: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct PlanTaskV1 {
     id: String,
-    phase: String,
     name: String,
 }
 
@@ -140,15 +121,55 @@ pub(crate) fn list_plans_core(workspace_root: &Path) -> Result<Vec<ForgeWorkspac
             Ok(raw) => raw,
             Err(_) => continue,
         };
-        let parsed: PlanV1 = match serde_json::from_str(&raw) {
+        let value: serde_json::Value = match serde_json::from_str(&raw) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let schema = value
+            .get("$schema")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if schema != "plan-v1" {
+            continue;
+        }
+
+        // plan-v1 is tasks-only: reject phase-based legacy plans.
+        if value.get("phases").is_some() {
+            continue;
+        }
+        let has_task_phase = value
+            .get("tasks")
+            .and_then(|v| v.as_array())
+            .map(|tasks| {
+                tasks.iter().any(|task| {
+                    task.as_object()
+                        .map(|obj| obj.contains_key("phase"))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+        if has_task_phase {
+            continue;
+        }
+
+        let parsed: PlanV1 = match serde_json::from_value(value) {
             Ok(parsed) => parsed,
             Err(_) => continue,
         };
-        if parsed.schema.trim() != "plan-v1" {
-            continue;
-        }
+
         let plan_id = parsed.id.trim();
         if plan_id.is_empty() {
+            continue;
+        }
+        // Task ids must match array order: task-1..task-n.
+        if parsed
+            .tasks
+            .iter()
+            .enumerate()
+            .any(|(i, task)| task.id.trim() != format!("task-{}", i + 1))
+        {
             continue;
         }
 
@@ -195,15 +216,6 @@ pub(crate) fn list_plans_core(workspace_root: &Path) -> Result<Vec<ForgeWorkspac
             (None, HashMap::new())
         };
 
-        let phases = parsed
-            .phases
-            .into_iter()
-            .map(|phase| ForgePlanPhaseV1 {
-                id: phase.id,
-                title: phase.title,
-            })
-            .collect::<Vec<_>>();
-
         let tasks = parsed
             .tasks
             .into_iter()
@@ -214,7 +226,6 @@ pub(crate) fn list_plans_core(workspace_root: &Path) -> Result<Vec<ForgeWorkspac
                     .unwrap_or_else(|| "pending".to_string());
                 ForgePlanTaskV1 {
                     id: task.id,
-                    phase: task.phase,
                     name: task.name,
                     status,
                 }
@@ -236,7 +247,6 @@ pub(crate) fn list_plans_core(workspace_root: &Path) -> Result<Vec<ForgeWorkspac
             id: plan_id.to_string(),
             title,
             goal: parsed.goal,
-            phases,
             tasks,
             current_task_id,
             plan_path,
@@ -291,8 +301,7 @@ mod tests {
               "title": "Alpha",
               "goal": "Alpha goal",
               "context": { "tech_stack": ["x"], "constraints": [] },
-              "phases": [{ "id": "phase-1", "title": "P1", "description": "d" }],
-              "tasks": [{ "id": "task-1-1", "phase": "phase-1", "name": "T1", "description": "d", "depends_on": [], "files": ["a"], "verification": ["v"] }]
+              "tasks": [{ "id": "task-1", "name": "T1", "description": "d", "depends_on": [], "files": ["a"], "verification": ["v"] }]
             }),
         );
 
@@ -303,8 +312,8 @@ mod tests {
               "plan_id": "alpha",
               "iteration": 1,
               "summary": "",
-              "current_task": "task-1-1",
-              "tasks": [{ "id": "task-1-1", "status": "in_progress", "attempts": 1, "notes": "" }]
+              "current_task": "task-1",
+              "tasks": [{ "id": "task-1", "status": "in_progress", "attempts": 1, "notes": "" }]
             }),
         );
 
@@ -315,8 +324,7 @@ mod tests {
               "id": "nested-plan",
               "goal": "Nested goal",
               "context": { "tech_stack": ["x"], "constraints": [] },
-              "phases": [{ "id": "phase-1", "title": "P1", "description": "d" }],
-              "tasks": [{ "id": "task-1-1", "phase": "phase-1", "name": "T1", "description": "d", "depends_on": [], "files": ["a"], "verification": ["v"] }]
+              "tasks": [{ "id": "task-1", "name": "T1", "description": "d", "depends_on": [], "files": ["a"], "verification": ["v"] }]
             }),
         );
 
@@ -328,7 +336,7 @@ mod tests {
               "iteration": 0,
               "summary": "",
               "current_task": null,
-              "tasks": [{ "id": "task-1-1", "status": "completed", "attempts": 1, "notes": "" }]
+              "tasks": [{ "id": "task-1", "status": "completed", "attempts": 1, "notes": "" }]
             }),
         );
 
@@ -344,7 +352,7 @@ mod tests {
         let alpha = plans.iter().find(|p| p.id == "alpha").expect("alpha");
         assert_eq!(alpha.title.as_deref(), Some("Alpha"));
         assert_eq!(alpha.goal, "Alpha goal");
-        assert_eq!(alpha.current_task_id.as_deref(), Some("task-1-1"));
+        assert_eq!(alpha.current_task_id.as_deref(), Some("task-1"));
         assert_eq!(alpha.tasks.len(), 1);
         assert_eq!(alpha.tasks[0].status, "in_progress");
 

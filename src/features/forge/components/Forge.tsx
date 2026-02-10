@@ -9,7 +9,6 @@ import Play from "lucide-react/dist/esm/icons/play";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CollaborationModeOption, WorkspaceInfo } from "../../../types";
 import { ModalShell } from "../../design-system/components/modal/ModalShell";
-import { MaterialSymbol } from "../../design-system/components/icons/MaterialSymbol";
 import {
   PopoverMenuItem,
   PopoverSurface,
@@ -69,28 +68,18 @@ const defaultForgePlansClient: ForgePlansClient = {
   sendUserMessage,
 };
 
-type ForgePhase = {
-  name: string;
-  iconName: string;
-};
-
 type ForgeItemStatus = "pending" | "inProgress" | "completed";
 
 type ForgePlanItem = {
   title: string;
   status: ForgeItemStatus;
-  // If set, we render the full phase row with this as the current phase.
-  currentPhaseIndex?: number;
 };
 
 type ForgePlan = {
   id: string;
   name: string;
-  phases: ForgePhase[];
   items: ForgePlanItem[];
 };
-
-const PHASE_ICONS = ["looks_one", "looks_two", "looks_3", "looks_4", "looks_5"];
 
 function formatPlanLabel(plan: ForgeWorkspacePlan): string {
   const title = plan.title?.trim() ?? "";
@@ -119,37 +108,6 @@ function mapForgeItemStatus(status: string): ForgeItemStatus {
     return "inProgress";
   }
   return "pending";
-}
-
-function PhaseRow({
-  phases,
-  currentPhaseIndex,
-}: {
-  phases: ForgePhase[];
-  currentPhaseIndex: number;
-}) {
-  return (
-    <div className="forge-phases" aria-label="Phase progress">
-      {phases.map((phase, index) => {
-        const className =
-          index < currentPhaseIndex
-            ? "forge-phase is-complete"
-            : index === currentPhaseIndex
-              ? "forge-phase is-current"
-              : "forge-phase is-pending";
-        return (
-          <span key={`${phase.name}-${index}`} className={className}>
-            <span className="forge-phase-icon" aria-hidden>
-              <MaterialSymbol name={phase.iconName} size={14} ariaHidden />
-            </span>
-            <span className="forge-phase-name">
-              {index === currentPhaseIndex ? phase.name : null}
-            </span>
-          </span>
-        );
-      })}
-    </div>
-  );
 }
 
 function ForgeTemplatesModal({
@@ -440,40 +398,17 @@ export function Forge({
 
   const plans: ForgePlan[] = useMemo(() => {
     return workspacePlans.map((plan) => {
-      const phases: ForgePhase[] = plan.phases.map((phase, index) => ({
-        name: phase.title,
-        iconName: PHASE_ICONS[index] ?? "check_circle",
-      }));
-      const phaseIndexById = new Map<string, number>();
-      plan.phases.forEach((phase, index) => {
-        phaseIndexById.set(phase.id, index);
-      });
-      const currentTaskId = plan.currentTaskId ?? null;
-      const currentTaskPhaseId =
-        currentTaskId &&
-        (plan.tasks.find((task) => task.id === currentTaskId)?.phase ?? null);
-      const currentPhaseIndex =
-        currentTaskPhaseId != null
-          ? phaseIndexById.get(currentTaskPhaseId) ?? null
-          : null;
-
       const items: ForgePlanItem[] = plan.tasks.map((task) => {
         const status = mapForgeItemStatus(task.status);
-        const currentPhaseForItem =
-          currentPhaseIndex != null && currentTaskId === task.id
-            ? currentPhaseIndex
-            : undefined;
         return {
           title: task.name,
           status,
-          currentPhaseIndex: currentPhaseForItem,
         };
       });
 
       return {
         id: plan.id,
         name: formatPlanLabel(plan),
-        phases,
         items,
       };
     });
@@ -715,10 +650,6 @@ export function Forge({
             <ol className="forge-items">
               {selectedPlan.items.map((item, index) => {
                 const isCompleted = item.status === "completed";
-                const showPhases =
-                  !isCompleted &&
-                  item.currentPhaseIndex != null &&
-                  item.currentPhaseIndex >= 0;
                 const isRunning = item.status === "inProgress";
 
                 return (
@@ -735,12 +666,6 @@ export function Forge({
                       </span>
                       <span className="forge-item-title">{item.title}</span>
                     </div>
-                    {showPhases && selectedPlan.phases.length > 0 && (
-                      <PhaseRow
-                        phases={selectedPlan.phases}
-                        currentPhaseIndex={item.currentPhaseIndex!}
-                      />
-                    )}
                   </li>
                 );
               })}

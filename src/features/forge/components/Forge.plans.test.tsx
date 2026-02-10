@@ -29,11 +29,9 @@ describe("Forge plans", () => {
           id: "alpha",
           title: "Alpha",
           goal: "Alpha goal",
-          phases: [{ id: "phase-1", title: "Phase 1" }],
           tasks: [
             {
-              id: "task-1-1",
-              phase: "phase-1",
+              id: "task-1",
               name: "Task 1",
               status: "pending",
             },
@@ -81,11 +79,9 @@ describe("Forge plans", () => {
           id: "alpha",
           title: "Alpha",
           goal: "Alpha goal",
-          phases: [{ id: "phase-1", title: "Phase 1" }],
           tasks: [
             {
-              id: "task-1-1",
-              phase: "phase-1",
+              id: "task-1",
               name: "Task 1",
               status: "pending",
             },

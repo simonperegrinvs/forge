@@ -10,7 +10,7 @@ Full JSON Schema for `plan.json` files. Read this before generating a plan.
   "title": "Plan",
   "description": "A structured development plan for agentic coding orchestrators",
   "type": "object",
-  "required": ["$schema", "id", "goal", "context", "phases", "tasks"],
+  "required": ["$schema", "id", "goal", "context", "tasks"],
   "additionalProperties": false,
   "properties": {
     "$schema": {
@@ -23,6 +23,12 @@ Full JSON Schema for `plan.json` files. Read this before generating a plan.
       "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
       "maxLength": 64,
       "description": "URL-safe slug identifying this plan"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 80,
+      "description": "Short friendly label for UI/menus (keep under ~60 chars)"
     },
     "goal": {
       "type": "string",
@@ -61,46 +67,18 @@ Full JSON Schema for `plan.json` files. Read this before generating a plan.
         }
       }
     },
-    "phases": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["id", "title", "description"],
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^phase-[0-9]+$"
-          },
-          "title": {
-            "type": "string",
-            "maxLength": 50
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 200
-          }
-        }
-      }
-    },
     "tasks": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "phase", "name", "description", "depends_on", "files", "verification"],
+        "required": ["id", "name", "description", "depends_on", "files", "verification"],
         "additionalProperties": false,
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^task-[0-9]+-[0-9]+$",
-            "description": "Format: task-{phase_number}-{sequence}"
-          },
-          "phase": {
-            "type": "string",
-            "pattern": "^phase-[0-9]+$",
-            "description": "References a phase id"
+            "pattern": "^task-[0-9]+$",
+            "description": "Format: task-{sequence}"
           },
           "name": {
             "type": "string",
@@ -116,7 +94,7 @@ Full JSON Schema for `plan.json` files. Read this before generating a plan.
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^task-[0-9]+-[0-9]+$"
+              "pattern": "^task-[0-9]+$"
             },
             "description": "Task IDs that must complete before this task can start"
           },
@@ -144,7 +122,6 @@ Full JSON Schema for `plan.json` files. Read this before generating a plan.
 The orchestrator should enforce these rules programmatically after the LLM generates a plan:
 
 ### Referential integrity
-- Every task's `phase` must match an existing phase `id`
 - Every entry in `depends_on` must match an existing task `id`
 - No task can depend on itself
 
@@ -153,11 +130,9 @@ The orchestrator should enforce these rules programmatically after the LLM gener
 - At least one task must have `"depends_on": []` (an entry point)
 
 ### ID consistency
-- Task IDs must use the format `task-{phase_number}-{sequence}`
-- The phase number in the task ID should match the referenced phase
-  - e.g., `task-2-1` should have `"phase": "phase-2"`
-- Phase IDs must be sequential: `phase-1`, `phase-2`, etc.
-- Task sequences within a phase should be sequential: `task-2-1`, `task-2-2`, etc.
+- Task IDs must use the format `task-{sequence}`
+- Task IDs must be sequential starting at 1 with no gaps: `task-1`, `task-2`, ..., `task-n`
+- Task IDs must match the array order: `plan.tasks[0].id` is `task-1`, etc.
 
 ### Content quality checks
 - `description` should contain concrete specifics (endpoint paths, field names, config values)
@@ -170,6 +145,7 @@ The orchestrator should enforce these rules programmatically after the LLM gener
 {
   "$schema": "plan-v1",
   "id": "task-api",
+  "title": "Tasks API",
   "goal": "A REST API with JWT auth, task CRUD with pagination, and WebSocket notifications, fully tested with OpenAPI docs",
   "context": {
     "tech_stack": ["Node.js", "TypeScript", "Express", "PostgreSQL", "Socket.io", "JWT"],
@@ -186,32 +162,9 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       { "path": "docs/api-contract.md", "description": "Agreed API contract with frontend team" }
     ]
   },
-  "phases": [
-    {
-      "id": "phase-1",
-      "title": "Foundation",
-      "description": "Project setup, database connection, and base configuration"
-    },
-    {
-      "id": "phase-2",
-      "title": "Authentication",
-      "description": "JWT auth system with email/password and Google OAuth2"
-    },
-    {
-      "id": "phase-3",
-      "title": "Core Features",
-      "description": "Task CRUD endpoints and real-time notifications"
-    },
-    {
-      "id": "phase-4",
-      "title": "Quality & Docs",
-      "description": "Integration tests and OpenAPI documentation"
-    }
-  ],
   "tasks": [
     {
-      "id": "task-1-1",
-      "phase": "phase-1",
+      "id": "task-1",
       "name": "Project setup and database connection",
       "description": "Initialize Express+TypeScript app with tsconfig (strict mode). Configure dotenv for DATABASE_URL, PORT, ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET env vars. Set up PostgreSQL connection pool using pg library with max 20 connections. Create GET /health endpoint returning { status: 'ok', db: boolean } where db reflects a successful SELECT 1 query.",
       "depends_on": [],
@@ -224,11 +177,10 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       ]
     },
     {
-      "id": "task-1-2",
-      "phase": "phase-1",
+      "id": "task-2",
       "name": "Error handling middleware",
       "description": "Create centralized error handling middleware. Define AppError class extending Error with statusCode and isOperational fields. Global error handler catches all errors, logs stack traces for 5xx, returns { error: string, code: string } to client. Add request ID middleware using uuid v4, attach to req and include in error responses.",
-      "depends_on": [],
+      "depends_on": ["task-1"],
       "files": ["src/middleware/error-handler.ts", "src/errors/app-error.ts", "src/middleware/request-id.ts"],
       "verification": [
         "Throwing AppError(404, 'Not found') returns { error: 'Not found', code: 'NOT_FOUND', requestId: '...' }",
@@ -237,11 +189,10 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       ]
     },
     {
-      "id": "task-2-1",
-      "phase": "phase-2",
+      "id": "task-3",
       "name": "JWT authentication endpoints",
       "description": "Implement POST /auth/register accepting { email, password, name }. Validate email format and password length >= 8. Hash password with bcrypt cost 12. Store in users table. Return { accessToken, refreshToken } as httpOnly cookies. Implement POST /auth/login with same response format. Access tokens: JWT with { userId, email } payload, 15min expiry signed with ACCESS_TOKEN_SECRET. Refresh tokens: opaque UUID stored in refresh_tokens table, 7-day expiry. POST /auth/refresh rotates refresh token (invalidate old, issue new pair). Rate limit login: 5 attempts per email per 15 minutes.",
-      "depends_on": ["task-1-1", "task-1-2"],
+      "depends_on": ["task-1", "task-2"],
       "files": ["src/routes/auth.ts", "src/services/auth.service.ts", "src/types/auth.ts"],
       "verification": [
         "POST /auth/register with valid data returns 201 with Set-Cookie headers",
@@ -255,11 +206,10 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       ]
     },
     {
-      "id": "task-2-2",
-      "phase": "phase-2",
+      "id": "task-4",
       "name": "Google OAuth2 integration",
       "description": "Add Google OAuth2 using passport-google-oauth20. Configure with GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars. GET /auth/google redirects to Google consent screen requesting email and profile scopes. GET /auth/google/callback handles the response: if a user with matching email exists, link the Google ID to their account; if not, create a new user. Return same token format as /auth/login. Store google_id in users table (nullable column).",
-      "depends_on": ["task-2-1"],
+      "depends_on": ["task-3"],
       "files": ["src/routes/auth-google.ts", "src/services/oauth.service.ts", "src/config/passport.ts"],
       "verification": [
         "GET /auth/google returns 302 redirect to accounts.google.com",
@@ -269,11 +219,10 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       ]
     },
     {
-      "id": "task-3-1",
-      "phase": "phase-3",
+      "id": "task-5",
       "name": "Task CRUD endpoints",
       "description": "Implement authenticated CRUD for /tasks. POST /tasks creates a task with { title, description, status, assigneeId }. GET /tasks returns paginated list (default 20 per page) with ?page, ?status, ?assignee query filters, sorted by createdAt desc. GET /tasks/:id returns single task. PUT /tasks/:id updates task fields. DELETE /tasks/:id soft-deletes (sets deletedAt). All routes require valid access token via auth middleware. Users can only see/modify tasks they created or are assigned to.",
-      "depends_on": ["task-2-1"],
+      "depends_on": ["task-3"],
       "files": ["src/routes/tasks.ts", "src/services/task.service.ts", "src/types/task.ts"],
       "verification": [
         "POST /tasks without auth returns 401",
@@ -287,11 +236,10 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       ]
     },
     {
-      "id": "task-3-2",
-      "phase": "phase-3",
+      "id": "task-6",
       "name": "WebSocket notifications",
       "description": "Set up Socket.io server attached to the Express http server. Authenticate WebSocket connections by extracting JWT from the handshake auth header. On task.created, task.updated, and task.assigned events, broadcast to relevant users (creator and assignee). Event payload: { type, taskId, taskTitle, actorId, timestamp }. Store notification in notifications table with userId, type, payload, readAt (nullable). Add GET /notifications for authenticated user with ?unread=true filter.",
-      "depends_on": ["task-3-1"],
+      "depends_on": ["task-5"],
       "files": ["src/websocket/server.ts", "src/websocket/handlers.ts", "src/services/notification.service.ts", "src/routes/notifications.ts"],
       "verification": [
         "WebSocket connection without valid JWT is rejected",
@@ -303,11 +251,10 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       ]
     },
     {
-      "id": "task-4-1",
-      "phase": "phase-4",
+      "id": "task-7",
       "name": "Integration tests",
       "description": "Write Jest integration tests using supertest. Set up test database with docker-compose.test.yml running PostgreSQL. Before each test suite: run migrations, seed test data. After each suite: truncate all tables. Cover: full auth flow (register -> login -> refresh -> access protected route), task CRUD with auth, pagination edge cases (empty results, last page), WebSocket connection and event delivery. Aim for 80%+ coverage on src/services/ and src/routes/.",
-      "depends_on": ["task-2-2", "task-3-2"],
+      "depends_on": ["task-4", "task-6"],
       "files": ["tests/auth.test.ts", "tests/tasks.test.ts", "tests/notifications.test.ts", "tests/setup.ts", "docker-compose.test.yml", "jest.config.ts"],
       "verification": [
         "npm test runs all tests and exits 0",
@@ -317,11 +264,10 @@ The orchestrator should enforce these rules programmatically after the LLM gener
       ]
     },
     {
-      "id": "task-4-2",
-      "phase": "phase-4",
+      "id": "task-8",
       "name": "OpenAPI documentation",
       "description": "Add swagger-jsdoc and swagger-ui-express. Write JSDoc annotations on all route handlers with @openapi tags. Include request/response schemas, auth requirements (bearerAuth), error responses, and query parameter descriptions. Serve Swagger UI at GET /docs. Generate openapi.json at build time via a script in package.json.",
-      "depends_on": ["task-3-2"],
+      "depends_on": ["task-6"],
       "files": ["src/config/swagger.ts", "src/routes/*.ts", "scripts/generate-openapi.ts"],
       "verification": [
         "GET /docs serves Swagger UI page",
@@ -334,4 +280,3 @@ The orchestrator should enforce these rules programmatically after the LLM gener
   ]
 }
 ```
-

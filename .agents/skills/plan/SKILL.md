@@ -40,13 +40,9 @@ Before generating anything, read:
     "constraints": ["Must use existing schema in db/schema.sql"],
     "references": [{ "path": "db/schema.sql", "description": "Existing DB schema" }]
   },
-  "phases": [
-    { "id": "phase-1", "title": "Foundation", "description": "Setup and config" }
-  ],
   "tasks": [
     {
-      "id": "task-1-1",
-      "phase": "phase-1",
+      "id": "task-1",
       "name": "Project setup",
       "description": "Detailed implementation instructions...",
       "depends_on": [],
@@ -60,13 +56,8 @@ Before generating anything, read:
 ## Key rules
 
 ### IDs
-- Phase IDs: `phase-1`, `phase-2`, etc.
-- Task IDs: `task-{phase}-{seq}` -- e.g. `task-2-1` is first task in phase 2
+- Task IDs: `task-{n}` -- e.g. `task-1`, `task-2`, ...
 - Plan ID: URL-safe slug -- e.g. `auth-system`, `notification-service`
-
-### Phases
-- 3-5 logical groupings. For UI display, not execution order.
-- The orchestrator uses `depends_on` to determine execution order.
 
 ### Title
 - Add a short, friendly `title` for UI/menus (aim for <= 60 chars).

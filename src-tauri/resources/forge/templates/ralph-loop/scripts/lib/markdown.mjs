@@ -8,7 +8,6 @@ export function planToMarkdown(plan) {
     ? formatBulletList(plan.context.constraints)
     : "";
 
-  const phases = Array.isArray(plan?.phases) ? plan.phases : [];
   const tasks = Array.isArray(plan?.tasks) ? plan.tasks : [];
 
   const lines = [];
@@ -29,21 +28,11 @@ export function planToMarkdown(plan) {
     lines.push("");
   }
 
-  if (phases.length > 0) {
-    lines.push("## Phases");
-    lines.push("");
-    for (const phase of phases) {
-      lines.push(`- ${phase.id}: ${phase.title} - ${phase.description}`);
-    }
-    lines.push("");
-  }
-
   lines.push("## Tasks");
   lines.push("");
   for (const task of tasks) {
     lines.push(`### ${task.id}: ${task.name}`);
     lines.push("");
-    lines.push(`- Phase: ${task.phase}`);
     lines.push(`- Depends on: ${Array.isArray(task.depends_on) && task.depends_on.length > 0 ? task.depends_on.join(", ") : "(none)"}`);
     lines.push("");
     lines.push(task.description ?? "");
@@ -62,4 +51,3 @@ export function planToMarkdown(plan) {
 
   return `${lines.join("\n").trimEnd()}\n`;
 }
-
