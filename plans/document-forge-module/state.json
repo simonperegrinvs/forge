@@ -1,0 +1,98 @@
+{
+  "$schema": "state-v2",
+  "plan_id": "document-forge-module",
+  "iteration": 0,
+  "summary": "task-1 completed: created docs/forge.md outline grounded in current Forge implementation. Next: fill in backend command docs, templates/artifacts, and plan/state format details; link from README.",
+  "tasks": [
+    {
+      "id": "task-1",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Added concrete docs outline in docs/forge.md with exact IPC command names and implementation file paths (app adapter, shared cores, remote proxy, daemon RPC). Captured workspace artifact layout (.agent/, .agents/skills sync, plans/) and practical plan/state conventions from src-tauri/src/shared/forge_* cores.",
+      "commit_sha": "3f373e367a3d49a7e1abe35a141a793a224c660c",
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "completed",
+          "attempts": 1,
+          "notes": "docs/forge.md created as an outline grounded in src-tauri/src/forge/mod.rs, src-tauri/src/shared/forge_templates_core.rs, src-tauri/src/shared/forge_plans_core.rs, src-tauri/src/remote_backend/mod.rs, and daemon RPC wiring."
+        }
+      ]
+    },
+    {
+      "id": "task-2",
+      "status": "pending",
+      "attempts": 0,
+      "notes": "",
+      "commit_sha": null,
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "task-3",
+      "status": "pending",
+      "attempts": 0,
+      "notes": "",
+      "commit_sha": null,
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "task-4",
+      "status": "pending",
+      "attempts": 0,
+      "notes": "",
+      "commit_sha": null,
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "task-5",
+      "status": "pending",
+      "attempts": 0,
+      "notes": "",
+      "commit_sha": null,
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "task-6",
+      "status": "pending",
+      "attempts": 0,
+      "notes": "",
+      "commit_sha": null,
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
+        }
+      ]
+    }
+  ]
+}
