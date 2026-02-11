@@ -2,7 +2,7 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "Tasks 1-5 docs are implemented, including exact prompt-normalization and plan-mode compatibility rules. Next: task-6 README discoverability link.",
+  "summary": "Added a discoverable README Forge section with a single `docs/forge.md` link and concise bullets for template install/uninstall, normalized plan prompt, and plan listing/status join. Task-6 implementation is complete and ready for Forge checks.",
   "tasks": [
     {
       "id": "task-1",
@@ -66,10 +66,10 @@
     },
     {
       "id": "task-5",
-      "status": "in_progress",
+      "status": "completed",
       "attempts": 1,
       "notes": "Updated docs/forge.md to document `normalize_plan_prompt` with exact literal before/after rewrites: `.agent/skills/` to `.agents/skills/`, `plans/<plan_id>.json`/`plans/<plan-id>.json` to nested `plan.json` paths, legacy `## Output` file-write prompt rewrite into `<proposed_plan>` plan-mode instructions, and `@plan` prefix enforcement.",
-      "commit_sha": null,
+      "commit_sha": "af83d4207ef94ed7272ed8b4cc08ff85f6d020a8",
       "phases": [
         {
           "id": "implementation",
@@ -81,16 +81,16 @@
     },
     {
       "id": "task-6",
-      "status": "pending",
-      "attempts": 0,
-      "notes": "",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Updated README.md with a dedicated `## Forge` section that includes exactly one link to `docs/forge.md` and 4 concise bullets covering template lifecycle, normalized plan prompt behavior, and `forge_list_plans` status join behavior. `docs/forge.md` remains the canonical detailed reference.",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending",
-          "attempts": 0,
-          "notes": ""
+          "status": "completed",
+          "attempts": 1,
+          "notes": "README discoverability update completed in `README.md` under `## Forge`; no runtime code changes and no additional docs duplication added."
         }
       ]
     }
