@@ -2,7 +2,7 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "Task 1 and Task 2 completed with commits. Task 3 is next.",
+  "summary": "Tasks 1-2 are committed and task-3 docs are implemented (templates/install artifacts). Next: task-4 plan/state file conventions.",
   "tasks": [
     {
       "id": "task-1",
@@ -36,16 +36,16 @@
     },
     {
       "id": "task-3",
-      "status": "pending",
-      "attempts": 0,
-      "notes": "",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Expanded docs/forge.md with bundled template layout (`src-tauri/resources/forge/templates/<template-id>/`), `template.json` manifest field meanings (schema/id/title/version/files/entrypoints including planPrompt/executePrompt/planSchema/stateSchema/requiredSkills/hooks), install outputs (`.agent/templates/<id>/*`, `.agent/template-lock.json` with `forge-template-lock-v1`, `.agent/skills/*`), best-effort bridge sync to `.agents/skills/*` with non-overwrite behavior, `.git/info/exclude` `.agent/` rationale, and uninstall removals/non-removals.",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending",
-          "attempts": 0,
-          "notes": ""
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Documentation-only update in docs/forge.md covering template manifest contract and workspace artifacts for install/uninstall, including skill sync bridge and git exclude behavior."
         }
       ]
     },

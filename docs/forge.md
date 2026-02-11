@@ -48,6 +48,98 @@ Error implications:
 - A raw `current_exe` error string means executable path resolution failed before near-exe probing.
 - `"Bundled template not found: <templateId>"` means a template root was found, but `<root>/<templateId>` was not present as a directory.
 
+## Bundled Template Layout and Manifest Contract
+
+Bundled templates live at:
+
+- `src-tauri/resources/forge/templates/<template-id>/`
+
+Each template directory must contain:
+
+- `template.json` (required manifest)
+
+`forge_list_bundled_templates` only includes directories where `template.json` parses and `schema == "forge-template-v1"`.
+
+`template.json` fields (from `src-tauri/src/shared/forge_templates_core.rs`):
+
+| Field | Required | Meaning in current runtime |
+| --- | --- | --- |
+| `schema` | yes | Must be `"forge-template-v1"` or install/list rejects it. |
+| `id` | yes | Template id. Must match folder name during install. |
+| `title` | yes | Display name returned by `forge_list_bundled_templates`. |
+| `version` | yes | Template version returned by list/install lock. |
+| `files` | yes | Relative file list copied into workspace on install. Each entry must exist in the bundle. |
+| `entrypoints.planPrompt` | yes | Relative file path read by `forge_get_plan_prompt`. |
+| `entrypoints.executePrompt` | yes | Relative path validated by execution path setup. |
+| `entrypoints.phases` | yes | Relative phases file used by execution (`forge-phases-v1`). |
+| `entrypoints.planSchema` | yes | Required manifest key; kept in installed template manifest for template tooling. |
+| `entrypoints.stateSchema` | yes | Required manifest key; kept in installed template manifest for template tooling. |
+| `entrypoints.requiredSkills` | yes | Required manifest key listing skill ids expected by the template. |
+| `entrypoints.hooks.postPlan` | yes | Relative hook path executed after plan export. |
+| `entrypoints.hooks.preExecute` | yes | Relative hook path executed before prompt handoff. |
+| `entrypoints.hooks.postStep` | yes | Relative hook path executed after each phase/check cycle. |
+
+Path rules for manifest file references:
+
+- Must be relative paths.
+- Must not be absolute.
+- Must not contain `..` segments.
+
+## Workspace Install Artifacts
+
+`forge_install_template` installs into workspace root using these paths:
+
+- `.agent/templates/<template-id>/<file from template.json files[]>`
+- `.agent/skills/<relative path under skills/>` for each `files[]` entry starting with `skills/`
+- `.agent/template-lock.json`
+
+`template-lock.json` schema and fields are:
+
+```json
+{
+  "schema": "forge-template-lock-v1",
+  "installedTemplateId": "<template-id>",
+  "installedTemplateVersion": "<template-version>",
+  "installedAtIso": "<RFC3339 timestamp>",
+  "installedFiles": ["...from template.json files..."]
+}
+```
+
+Git ignore behavior during install:
+
+- Best-effort append of `.agent/` to `.git/info/exclude` (if `<workspace>/.git` exists).
+- This keeps Forge-managed workspace artifacts out of git by default without editing tracked `.gitignore`.
+
+## Skill Discovery Bridge (`.agent` -> `.agents`)
+
+Forge templates store workspace-local skills in:
+
+- `.agent/skills/*`
+
+Codex repository skill discovery uses:
+
+- `.agents/skills/*`
+
+Bridge behavior (`sync_agent_skills_into_repo_agents_dir_core`):
+
+- Triggered as best-effort after `forge_install_template`, `forge_get_installed_template`, and `forge_get_plan_prompt` (app and daemon paths).
+- Recursively copies files from `.agent/skills/*` to `.agents/skills/*`.
+- Does not overwrite existing `.agents/skills` files (existing files are left unchanged).
+- Sync failures are logged and do not fail those commands.
+
+## Workspace Uninstall Artifacts
+
+`forge_uninstall_template` currently removes only:
+
+- `.agent/templates/<installed_template_id>/` (derived from `.agent/template-lock.json`)
+- `.agent/template-lock.json`
+
+Uninstall does not remove:
+
+- `.agent/skills/*`
+- `.agents/skills/*`
+- Existing `.git/info/exclude` entries (including `.agent/`)
+
 ## Flow: Install Template
 
 1. Frontend calls `forgeInstallTemplate(workspaceId, templateId)` in `src/services/tauri.ts`.
