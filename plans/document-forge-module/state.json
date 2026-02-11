@@ -81,10 +81,10 @@
     },
     {
       "id": "task-6",
-      "status": "in_progress",
+      "status": "completed",
       "attempts": 1,
       "notes": "Updated README.md Forge section wording to make docs/forge.md the canonical discoverability link while keeping a single link occurrence and 4 high-level bullets (template install/uninstall, normalized plan prompt behavior, and plan listing with state-v2 join). No docs/forge.md content changes were required.",
-      "commit_sha": null,
+      "commit_sha": "29bc7899a0e9956422da32799825b72f003b5a81",
       "phases": [
         {
           "id": "implementation",
