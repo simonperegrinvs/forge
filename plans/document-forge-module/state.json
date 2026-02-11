@@ -4,8 +4,8 @@
   "tasks": [
     {
       "id": "task-1",
-      "status": "in_progress",
-      "commit_sha": null,
+      "status": "completed",
+      "commit_sha": "c2ec8e0dc1087ef94b5dc27ebae60e1d8506f3e7",
       "phases": [
         {
           "id": "implementation",
@@ -15,12 +15,12 @@
     },
     {
       "id": "task-2",
-      "status": "pending",
+      "status": "in_progress",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending"
+          "status": "completed"
         }
       ]
     },

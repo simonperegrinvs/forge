@@ -100,6 +100,8 @@ struct StateV2 {
     #[serde(rename = "$schema")]
     schema: String,
     plan_id: String,
+    iteration: i64,
+    summary: String,
     #[serde(default)]
     tasks: Vec<StateTaskV2>,
 }
@@ -108,6 +110,8 @@ struct StateV2 {
 struct StateTaskV2 {
     id: String,
     status: String,
+    attempts: i64,
+    notes: String,
     #[serde(default)]
     commit_sha: Option<String>,
     #[serde(default)]
@@ -118,6 +122,8 @@ struct StateTaskV2 {
 struct StatePhaseV2 {
     id: String,
     status: String,
+    attempts: i64,
+    notes: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1185,18 +1191,24 @@ await fs.writeFile(ctx.generatedExecutePromptPath, 'fresh prompt from post-step\
             json!({
                 "$schema": "state-v2",
                 "plan_id": "alpha",
+                "iteration": 0,
+                "summary": "",
                 "tasks": [
                     {
                         "id": "task-1",
                         "status": "completed",
+                        "attempts": 0,
+                        "notes": "",
                         "commit_sha": "abc123",
-                        "phases": [{ "id": "implementation", "status": "completed" }]
+                        "phases": [{ "id": "implementation", "status": "completed", "attempts": 0, "notes": "" }]
                     },
                     {
                         "id": "task-2",
                         "status": "pending",
+                        "attempts": 0,
+                        "notes": "",
                         "commit_sha": null,
-                        "phases": [{ "id": "implementation", "status": "pending" }]
+                        "phases": [{ "id": "implementation", "status": "pending", "attempts": 0, "notes": "" }]
                     }
                 ]
             }),
