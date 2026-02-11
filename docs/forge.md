@@ -142,6 +142,52 @@ It intentionally does not remove:
 - `.agents/skills/*`
 - `.git/info/exclude` entries (including `.agent/`)
 
+## Plan and State File Conventions (`forge_list_plans`)
+
+Plan discovery and status projection are implemented in `src-tauri/src/shared/forge_plans_core.rs::list_plans_core`.
+
+How plans are discovered:
+
+- Root directory is `<workspace>/plans`.
+- Discovery is recursive (`collect_json_files`), and only `.json` files are considered.
+- Dot-prefixed files/directories are skipped during traversal.
+- Each candidate JSON must parse and include `"$schema": "plan-v1"`.
+- Plan id is taken from the parsed plan JSON `id` field (trimmed); path names do not define the plan id.
+- Legacy phase-based formats are rejected:
+  - top-level `phases` key present, or
+  - any `tasks[*].phase` key present.
+- Task IDs must be strictly ordered `task-1`, `task-2`, ... in array order; non-matching plans are skipped.
+
+How state files are resolved (`resolve_state_path`):
+
+- Resolver checks candidate state files in this order:
+  1. Sibling to the plan file:
+     - if plan file name is `plan.json`: `state.json`
+     - otherwise: `<plan-stem>.state.json`
+  2. `plans/<planId>.state.json`
+  3. `plans/<planId>/state.json`
+- The first existing file is used.
+
+Concrete path examples that match resolver behavior:
+
+- Plan `plans/feature-a/plan.json` with plan id `feature-a`:
+  - first candidate: `plans/feature-a/state.json`
+  - fallback candidates: `plans/feature-a.state.json`, `plans/feature-a/state.json`
+- Plan `plans/releases/q2.json` with plan id `release-q2`:
+  - first candidate: `plans/releases/q2.state.json`
+  - fallback candidates: `plans/release-q2.state.json`, `plans/release-q2/state.json`
+- Plan `plans/alpha.json` with plan id `alpha`:
+  - first candidate: `plans/alpha.state.json`
+  - fallback candidates: `plans/alpha.state.json`, `plans/alpha/state.json`
+
+How task status and current task are surfaced (`ForgeWorkspacePlanV1`):
+
+- For each plan task, status comes from matching `tasks[*].id` in the resolved state file only when state parses and has `"$schema": "state-v2"`.
+- If state is missing, invalid JSON, or not `state-v2`, task statuses default to `"pending"`.
+- If a specific task has no matching state entry, that task also defaults to `"pending"`.
+- `current_task_id` is currently always `None` in core output (frontend receives `currentTaskId: null`).
+- Plan results are deduplicated by `id` (newest `updated_at_ms` wins) and sorted descending by `updated_at_ms`.
+
 ## Flow: Template Install
 
 1. Frontend calls `forgeInstallTemplate(workspaceId, templateId)` in `src/services/tauri.ts`.

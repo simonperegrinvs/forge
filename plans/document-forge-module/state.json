@@ -2,11 +2,11 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "Task 3 implemented: docs/forge.md now documents bundled template manifest fields plus install/uninstall workspace artifacts (.agent/templates, forge-template-lock-v1, .agent/.agents skill bridge, git exclude rationale). Next: plan/state file conventions.",
+  "summary": "Task 4 implemented: docs/forge.md now documents Forge plan/state discovery and status projection (plan-v1 filtering, resolve_state_path order, state-v2 join defaults, currentTaskId null behavior) with concrete path examples. Next: prompt normalization and plan-mode compatibility.",
   "tasks": [
     {
       "id": "task-1",
-      "status": "in_progress",
+      "status": "completed",
       "attempts": 1,
       "notes": "Created docs/forge.md as an explicit section-by-section outline grounded in live code paths. Included exact IPC names (forge_list_bundled_templates, forge_get_installed_template, forge_install_template, forge_uninstall_template, forge_list_plans, forge_get_plan_prompt) and implementation paths across src-tauri/src/lib.rs, src-tauri/src/forge/mod.rs, src-tauri/src/remote_backend/mod.rs, src-tauri/src/bin/codex_monitor_daemon/rpc.rs, src-tauri/src/bin/codex_monitor_daemon.rs, src-tauri/src/shared/forge_templates_core.rs, and src-tauri/src/shared/forge_plans_core.rs. Captured required outline sections for workspace artifacts, template manifest entrypoints, plan/state conventions, prompt normalization, and troubleshooting error cases.",
       "commit_sha": "83f4ddf9e52524cc4de652988a814f19f9d675dc",
@@ -39,7 +39,7 @@
       "status": "in_progress",
       "attempts": 1,
       "notes": "Expanded docs/forge.md with a template-centric section grounded in src-tauri/src/shared/forge_templates_core.rs and forge_execute_core.rs. Documented bundled layout src-tauri/resources/forge/templates/<template-id>/, required template.json, manifest field semantics (schema/id/title/version/files/entrypoints with planPrompt, executePrompt, phases, planSchema, stateSchema, requiredSkills, hooks). Documented install artifacts under .agent/templates/<template-id>/..., .agent/template-lock.json with schema forge-template-lock-v1, skill mirroring to .agent/skills from files entries under skills/, best-effort sync into .agents/skills with explicit non-overwrite behavior, and .git/info/exclude .agent/ rationale. Documented uninstall scope as only .agent/templates/<installed_template_id>/ and .agent/template-lock.json.",
-      "commit_sha": null,
+      "commit_sha": "ef0787bf84408b0c4808e26bdaecf41fe8d7ff61",
       "phases": [
         {
           "id": "implementation",
@@ -51,16 +51,16 @@
     },
     {
       "id": "task-4",
-      "status": "pending",
-      "attempts": 0,
-      "notes": "",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Added a dedicated 'Plan and State File Conventions (forge_list_plans)' section to docs/forge.md based on src-tauri/src/shared/forge_plans_core.rs. Documented recursive plans/ scanning, plan-v1 requirement, plan id source from plan JSON id, legacy phase-plan rejection, ordered task-id validation, resolve_state_path candidate order (state.json, <stem>.state.json, plans/<planId>.state.json, plans/<planId>/state.json), task status join rules (state-v2 only), pending default semantics, current_task_id/currentTaskId behavior, and dedupe/sort rules. Included multiple concrete plan/state path examples.",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending",
-          "attempts": 0,
-          "notes": ""
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Updated docs/forge.md with code-grounded plan/state conventions and resolver examples satisfying task verification requirements."
         }
       ]
     },
