@@ -12,3 +12,5 @@
 - 2026-02-11 iter 0: For task-2 docs, include all current `forge_*` invokes (template, plans, and execution helpers), not just template/plan commands, so the command matrix stays aligned with `lib.rs` registration and `tauri.ts` wrappers.
 - 2026-02-11 iter 0: Forge install uses ".git/info/exclude" for `.agent/` (idempotent, no tracked .gitignore change), and `.agent/skills` -> `.agents/skills` sync is best-effort and non-overwriting.
 - 2026-02-11 iter 0: `forge_list_plans` derives plan identity from plan JSON `id` (not file path), then resolves state via ordered candidates and only imports statuses from `state-v2`; otherwise every task defaults to `pending`.
+- 2026-02-11 iter 0: Prompt normalization prepends `@plan` unless the first non-empty line is exactly `@plan`; for empty prompt files it returns exactly `@plan\n`.
+- 2026-02-11 iter 0: `resolve_state_path` is first-match ordered; a sibling `state.json` or `<stem>.state.json` overrides `plans/<planId>.state.json` and `plans/<planId>/state.json` when multiple files exist.

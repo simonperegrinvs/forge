@@ -2,7 +2,7 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "Task 5 implemented: docs/forge.md now documents prompt normalization before agent delivery, including exact string rewrites, legacy output-section conversion for plan mode, and @plan prefix enforcement. Next: add README discoverability link.",
+  "summary": "Task 6 implemented: README now has a dedicated Forge discoverability section linking docs/forge.md once, with concise bullets for templates, normalized plan prompts, and plan listing/status join. Next: run Forge verification checks and finalize commit.",
   "tasks": [
     {
       "id": "task-1",
@@ -51,10 +51,10 @@
     },
     {
       "id": "task-4",
-      "status": "completed",
+      "status": "in_progress",
       "attempts": 1,
       "notes": "Added a dedicated 'Plan and State File Conventions (forge_list_plans)' section to docs/forge.md based on src-tauri/src/shared/forge_plans_core.rs. Documented recursive plans/ scanning, plan-v1 requirement, plan id source from plan JSON id, legacy phase-plan rejection, ordered task-id validation, resolve_state_path candidate order (state.json, <stem>.state.json, plans/<planId>.state.json, plans/<planId>/state.json), task status join rules (state-v2 only), pending default semantics, current_task_id/currentTaskId behavior, and dedupe/sort rules. Included multiple concrete plan/state path examples.",
-      "commit_sha": "5d7aa09644912e025656167a2156ac2161df55b1",
+      "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
@@ -69,7 +69,7 @@
       "status": "in_progress",
       "attempts": 1,
       "notes": "Added a 'Plan Prompt Normalization and Plan-Mode Compatibility' section in docs/forge.md based on src-tauri/src/shared/forge_templates_core.rs::normalize_plan_prompt. Documented exact string replacements (.agent/skills/ -> .agents/skills/, plans/<plan_id>.json -> plans/<plan_id>/plan.json, plans/<plan-id>.json -> plans/<plan-id>/plan.json), legacy rewrite trigger markers (After writing the file / Create `plans/<plan_id> / Path: plans/<plan_id>) gated by ## Output, the replacement plan-mode output requirements, and @plan prefix behavior.",
-      "commit_sha": null,
+      "commit_sha": "acfec0aa79648615c1ab9a8eb44cf8f2e0b7bed5",
       "phases": [
         {
           "id": "implementation",
@@ -81,16 +81,16 @@
     },
     {
       "id": "task-6",
-      "status": "pending",
-      "attempts": 0,
-      "notes": "",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Updated README.md Forge section wording to make docs/forge.md the canonical discoverability link while keeping a single link occurrence and 4 high-level bullets (template install/uninstall, normalized plan prompt behavior, and plan listing with state-v2 join). No docs/forge.md content changes were required.",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending",
-          "attempts": 0,
-          "notes": ""
+          "status": "completed",
+          "attempts": 1,
+          "notes": "README.md Forge section verified as easy to find and updated with canonical docs link phrasing; section retains concise non-duplicative bullets aligned with docs/forge.md."
         }
       ]
     }

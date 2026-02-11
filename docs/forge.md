@@ -146,47 +146,39 @@ It intentionally does not remove:
 
 Plan discovery and status projection are implemented in `src-tauri/src/shared/forge_plans_core.rs::list_plans_core`.
 
-How plans are discovered:
+Discovery and filtering:
 
-- Root directory is `<workspace>/plans`.
-- Discovery is recursive (`collect_json_files`), and only `.json` files are considered.
-- Dot-prefixed files/directories are skipped during traversal.
-- Each candidate JSON must parse and include `"$schema": "plan-v1"`.
-- Plan id is taken from the parsed plan JSON `id` field (trimmed); path names do not define the plan id.
-- Legacy phase-based formats are rejected:
+- Forge scans `<workspace>/plans` recursively and considers only `.json` files.
+- Dot-prefixed paths are ignored while traversing (`collect_json_files` skips hidden files/directories).
+- Candidate JSON must parse and have `"$schema": "plan-v1"`.
+- Legacy phase format is explicitly rejected:
   - top-level `phases` key present, or
   - any `tasks[*].phase` key present.
-- Task IDs must be strictly ordered `task-1`, `task-2`, ... in array order; non-matching plans are skipped.
+- Plan id comes from JSON `id` (trimmed) and must be non-empty.
+- Task ids must be ordered `task-1..task-n` in array order; invalid files are skipped.
 
-How state files are resolved (`resolve_state_path`):
+State resolution (`resolve_state_path`):
 
-- Resolver checks candidate state files in this order:
-  1. Sibling to the plan file:
-     - if plan file name is `plan.json`: `state.json`
-     - otherwise: `<plan-stem>.state.json`
+- For each plan file, Forge checks state candidates in this order and uses the first existing file:
+  1. If plan filename is `plan.json`, sibling `state.json`; otherwise sibling `<plan-stem>.state.json`.
   2. `plans/<planId>.state.json`
   3. `plans/<planId>/state.json`
-- The first existing file is used.
 
-Concrete path examples that match resolver behavior:
+Concrete path examples:
 
-- Plan `plans/feature-a/plan.json` with plan id `feature-a`:
-  - first candidate: `plans/feature-a/state.json`
-  - fallback candidates: `plans/feature-a.state.json`, `plans/feature-a/state.json`
-- Plan `plans/releases/q2.json` with plan id `release-q2`:
-  - first candidate: `plans/releases/q2.state.json`
-  - fallback candidates: `plans/release-q2.state.json`, `plans/release-q2/state.json`
-- Plan `plans/alpha.json` with plan id `alpha`:
-  - first candidate: `plans/alpha.state.json`
-  - fallback candidates: `plans/alpha.state.json`, `plans/alpha/state.json`
+- Plan `plans/document-forge-module/plan.json` (id `document-forge-module`) -> first candidate `plans/document-forge-module/state.json`.
+- Plan `plans/releases/q2.json` (id `release-q2`) -> first candidate `plans/releases/q2.state.json`, then `plans/release-q2.state.json`, then `plans/release-q2/state.json`.
+- Plan `plans/alpha.json` (id `alpha`) -> first candidate `plans/alpha.state.json`, then `plans/alpha/state.json`.
 
-How task status and current task are surfaced (`ForgeWorkspacePlanV1`):
+How `ForgeWorkspacePlanV1` is populated:
 
-- For each plan task, status comes from matching `tasks[*].id` in the resolved state file only when state parses and has `"$schema": "state-v2"`.
-- If state is missing, invalid JSON, or not `state-v2`, task statuses default to `"pending"`.
-- If a specific task has no matching state entry, that task also defaults to `"pending"`.
-- `current_task_id` is currently always `None` in core output (frontend receives `currentTaskId: null`).
-- Plan results are deduplicated by `id` (newest `updated_at_ms` wins) and sorted descending by `updated_at_ms`.
+- `id`, `title`, `goal`, and ordered `tasks` are taken from the parsed `plan-v1` file.
+- `planPath` is workspace-relative when possible (for example, `plans/document-forge-module/plan.json`).
+- `updatedAtMs` is the plan file mtime.
+- Task statuses are joined only from resolved state files with `"$schema": "state-v2"` by matching task ids.
+- If state is missing, unreadable, invalid, non-`state-v2`, or missing a task status, Forge returns `"pending"` for that task.
+- `currentTaskId` is always `null` (`current_task_id: None` in Rust).
+- Duplicate plan ids are deduplicated by keeping the newest `updatedAtMs`, then sorted descending by `updatedAtMs`.
 
 ## Flow: Template Install
 
@@ -221,84 +213,33 @@ How task status and current task are surfaced (`ForgeWorkspacePlanV1`):
 
 `src-tauri/src/shared/forge_templates_core.rs::read_installed_template_plan_prompt_core` always returns the prompt after `normalize_plan_prompt`.
 
-Exact rewrite rules in `normalize_plan_prompt`:
+Exact normalization rules in `normalize_plan_prompt`:
 
-- Skills path rewrite:
-  - before: `.agent/skills/`
-  - after: `.agents/skills/`
-- Plan output path rewrite:
-  - before: `plans/<plan_id>.json`
-  - after: `plans/<plan_id>/plan.json`
-- Plan output path rewrite (alternate token form):
-  - before: `plans/<plan-id>.json`
-  - after: `plans/<plan-id>/plan.json`
+- Skills path rewrite: before `.agent/skills/` -> after `.agents/skills/`.
+- Plan output path rewrite (underscore token): before `plans/<plan_id>.json` -> after `plans/<plan_id>/plan.json`.
+- Plan output path rewrite (hyphen token): before `plans/<plan-id>.json` -> after `plans/<plan-id>/plan.json`.
+- Legacy plan-output rewrite trigger: before marker strings `After writing the file` or `Create \`plans/<plan_id>` or `Path: plans/<plan_id>` (with `## Output` present) -> after replacement of everything from first `## Output` onward with this exact text:
 
-Legacy file-write output instructions are rewritten into plan collaboration-mode output requirements only when both conditions are true:
+```md
+## Output
 
-- Prompt contains at least one marker:
-  - `After writing the file`
-  - `Create \`plans/<plan_id>`
-  - `Path: plans/<plan_id>`
-- Prompt contains `## Output`
+- Choose a `plan_id` slug matching `^[a-z0-9][a-z0-9-]*[a-z0-9]$` (max 64 chars).
+- Output the plan as the exact `plan-v1` JSON object inside a single `<proposed_plan>...</proposed_plan>` block.
+- Do NOT write any files yet.
 
-When that detection matches, the existing `## Output` section is replaced with a plan-mode block that requires:
+Inside the JSON, include:
 
-- `- Choose a \`plan_id\` slug matching \`^[a-z0-9][a-z0-9-]*[a-z0-9]$\` (max 64 chars).`
-- `- Output the plan as the exact \`plan-v1\` JSON object inside a single \`<proposed_plan>...</proposed_plan>\` block.`
-- `- Do NOT write any files yet.`
-- `## Hard requirement`
-- `Do NOT implement the plan. Stop after outputting the \`<proposed_plan>\` block.`
+- `"$schema": "plan-v1"`
+- `"id": "<plan_id>"`
+- `"title": "<short title>"`
 
-`@plan` enforcement:
+## Hard requirement
 
-- If the first non-empty line is not exactly `@plan`, Forge prepends `@plan\n\n`.
-- If the prompt is empty, Forge returns exactly `@plan\n`.
+Do NOT implement the plan. Stop after outputting the `<proposed_plan>` block.
+```
 
-## Plan Discovery and State Join Conventions
-
-`forge_list_plans` uses `src-tauri/src/shared/forge_plans_core.rs::list_plans_core`.
-
-Discovery scope:
-
-- Plans are discovered by recursively walking `plans/` under the workspace root.
-- Dot-prefixed entries are skipped during traversal (`.foo`, `.bar.json`, and files inside hidden directories are ignored).
-- Only `.json` files are considered.
-
-Plan schema and validation filters:
-
-- File JSON must include `"$schema": "plan-v1"`; anything else is skipped.
-- Legacy phase-based formats are rejected:
-  - Top-level `phases` key present -> skip.
-  - Any `tasks[*].phase` field present -> skip.
-- Parsed `id` must be non-empty (`ForgeWorkspacePlanV1.id` comes from plan JSON `id`, not filename/path).
-- Task ids must exactly match array order: `task-1`, `task-2`, ..., `task-n`; otherwise the plan is skipped.
-
-State file resolution (`resolve_state_path`):
-
-- For each discovered plan file, Forge probes these candidates in order and uses the first existing file:
-  1. If plan filename is `plan.json`: sibling `state.json`.
-  2. Otherwise: sibling `<plan_file_stem>.state.json`.
-  3. `plans/<planId>.state.json`.
-  4. `plans/<planId>/state.json`.
-
-Concrete examples that match this resolver:
-
-- Plan `plans/document-forge-module/plan.json` -> state candidate `plans/document-forge-module/state.json`.
-- Plan `plans/document-forge-module.json` -> state candidate `plans/document-forge-module.state.json`.
-- Plan `plans/nested/release-plan.json` -> state candidate `plans/nested/release-plan.state.json`; if missing, fallback candidates include `plans/release-plan.state.json` and `plans/release-plan/state.json` when plan id is `release-plan`.
-
-How task status and `currentTaskId` are surfaced in `ForgeWorkspacePlanV1`:
-
-- If a resolved state file parses as `"$schema": "state-v2"`, task statuses are joined by matching `state.tasks[*].id` to plan `tasks[*].id`.
-- Empty task ids or empty status values in state are ignored.
-- If no state file exists, state JSON is unreadable/unparseable, or state schema is not `state-v2`, every plan task status defaults to `"pending"`.
-- `currentTaskId` is always returned as `null` by `list_plans_core` (`current_task_id: None` in Rust).
-
-Other output shaping rules in `ForgeWorkspacePlanV1`:
-
-- `planPath` is workspace-relative when possible (for example, `plans/document-forge-module/plan.json`).
-- `updatedAtMs` is derived from the plan file mtime.
-- Duplicate plan ids are deduplicated by keeping the entry with the newest `updatedAtMs`, then sorting all plans descending by `updatedAtMs`.
+- Plan skill prefix rewrite: before first non-empty line is not `@plan` -> after prompt is prefixed with `@plan\n\n`.
+- Empty prompt fallback: before no lines/text -> after exact output `@plan\n`.
 
 ## Backend Error Signals For These Commands
 

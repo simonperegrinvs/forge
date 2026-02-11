@@ -45,7 +45,7 @@ CodexMonitor is a Tauri app for orchestrating multiple Codex agents across local
 
 ## Forge
 
-- See the Forge module documentation: [docs/forge.md](docs/forge.md).
+- Canonical Forge module docs: [docs/forge.md](docs/forge.md).
 - Installs and uninstalls bundled Forge templates into workspace-scoped `.agent` artifacts.
 - Returns a normalized template plan prompt for plan mode (including compatibility rewrites and `@plan` enforcement).
 - Lists workspace plans and joins task status from matching `state-v2` files.
