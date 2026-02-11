@@ -127,6 +127,24 @@ function extractTurnId(response: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function summarizeStartThreadResponse(response: unknown): string {
+  if (response == null) {
+    return String(response);
+  }
+  if (typeof response !== "object") {
+    return typeof response;
+  }
+  try {
+    const serialized = JSON.stringify(response);
+    if (!serialized) {
+      return "empty object";
+    }
+    return serialized.length > 240 ? `${serialized.slice(0, 237)}...` : serialized;
+  } catch {
+    return "unserializable object";
+  }
+}
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -249,6 +267,7 @@ export function useForgeExecution({
 
         let activeThreadId: string | null = null;
         let activeThreadTaskId: string | null = null;
+        const threadByTaskId = new Map<string, string>();
 
         while (isActive()) {
           const phase = await getNextPhasePrompt(workspace, normalizedPlanId);
@@ -258,9 +277,21 @@ export function useForgeExecution({
           if (!phase) {
             return;
           }
-          const phaseAttemptKey = `${phase.taskId}:${phase.phaseId}`;
+          const taskId = phase.taskId.trim();
+          if (!taskId) {
+            throw new Error("Forge next phase prompt returned an empty task id.");
+          }
+          const phaseId = phase.phaseId.trim();
+          if (!phaseId) {
+            throw new Error("Forge next phase prompt returned an empty phase id.");
+          }
+          const phaseAttemptKey = `${taskId}:${phaseId}`;
 
-          if (!activeThreadId || activeThreadTaskId !== phase.taskId) {
+          const mappedThreadId = threadByTaskId.get(taskId) ?? null;
+          if (!mappedThreadId) {
+            const previousTaskId = activeThreadTaskId;
+            const previousThreadId = activeThreadId;
+            activeTurnRef.current = null;
             const threadResponse = await startThread(workspace);
             if (!isActive()) {
               return;
@@ -268,15 +299,36 @@ export function useForgeExecution({
 
             const threadId = extractThreadId(threadResponse);
             if (!threadId) {
-              throw new Error("Forge execution start thread response missing thread id.");
+              throw new Error(
+                `Forge execution start thread response missing thread id (response=${summarizeStartThreadResponse(
+                  threadResponse,
+                )}).`,
+              );
             }
 
+            threadByTaskId.set(taskId, threadId);
             activeThreadId = threadId;
-            activeThreadTaskId = phase.taskId;
+            activeThreadTaskId = taskId;
+            if (
+              previousTaskId &&
+              previousTaskId !== taskId &&
+              previousThreadId &&
+              previousThreadId === threadId
+            ) {
+              console.warn("Forge execution task transition reused a thread id.", {
+                previousTaskId,
+                previousThreadId,
+                taskId,
+                threadId,
+              });
+            }
             onSelectThread?.(workspace, threadId);
+          } else {
+            activeThreadId = mappedThreadId;
+            activeThreadTaskId = taskId;
           }
 
-          setRunningInfo({ taskId: phase.taskId, phaseId: phase.phaseId });
+          setRunningInfo({ taskId, phaseId });
 
           const threadId = activeThreadId;
           if (!threadId) {
@@ -302,7 +354,7 @@ export function useForgeExecution({
             };
           }
 
-          const lastPhaseStatus = await waitForPhaseFinalStatus(phase.taskId, phase.phaseId);
+          const lastPhaseStatus = await waitForPhaseFinalStatus(taskId, phaseId);
 
           if (!isActive()) {
             return;
@@ -330,8 +382,8 @@ export function useForgeExecution({
           const checks = await runPhaseChecks(
             workspace,
             normalizedPlanId,
-            phase.taskId,
-            phase.phaseId,
+            taskId,
+            phaseId,
           );
           if (!checks.ok) {
             await wait(POLL_INTERVAL_MS);

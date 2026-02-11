@@ -177,3 +177,55 @@ Uninstall does not remove:
    - `plans/<plan_id>.json` and `plans/<plan-id>.json` -> nested `plans/<plan_id>/plan.json`
    - Prepends `@plan` when missing
 6. Remote mode sends method `"forge_get_plan_prompt"` with `{ "workspaceId" }`; daemon runs the same core path and returns the normalized prompt string.
+
+## Plan Discovery and State Join (`forge_list_plans`)
+
+`forge_list_plans` calls `src-tauri/src/shared/forge_plans_core.rs::list_plans_core`, which scans `<workspace>/plans` recursively and builds `ForgeWorkspacePlanV1` results from valid `plan-v1` files.
+
+Plan discovery and filtering rules:
+
+- Scan recursively under `<workspace>/plans` for `.json` files (`collect_json_files`).
+- Skip entries whose file or directory name starts with `.`.
+- Read and parse each JSON file; unreadable or invalid JSON files are ignored.
+- Require `"$schema": "plan-v1"`; any other schema is skipped.
+- Reject legacy phase-based formats:
+  - top-level `"phases"` present
+  - any `tasks[*].phase` field present
+- Parse plan id from JSON `id` (trimmed). Empty `id` is skipped.
+- Require task ids to match exact order `task-1`, `task-2`, ..., `task-n`; non-matching plans are skipped.
+
+State file resolution (`resolve_state_path`) checks these candidates in order and uses the first existing file:
+
+1. Same directory as plan:
+   - if plan filename is `plan.json`: `state.json`
+   - otherwise: `<plan-stem>.state.json`
+2. `plans/<planId>.state.json`
+3. `plans/<planId>/state.json`
+
+Concrete path examples that match resolver behavior:
+
+- Plan `plans/alpha.json` with id `alpha` -> state candidate `plans/alpha.state.json`
+- Plan `plans/nested/plan.json` with id `nested-plan` -> state candidate `plans/nested/state.json`
+- Plan `plans/releases/q2.json` with id `release-q2` -> fallback state candidates `plans/release-q2.state.json` then `plans/release-q2/state.json`
+
+Status join behavior:
+
+- State tasks are only read when the resolved state file parses and has `"$schema": "state-v2"`.
+- If state is missing, invalid, or non-`state-v2`, no statuses are imported.
+- For each plan task, status comes from matching state `tasks[*].id`; unmatched tasks default to `"pending"`.
+- Empty state task ids/status values are ignored.
+
+`ForgeWorkspacePlanV1` output fields (serialized as camelCase to frontend `ForgeWorkspacePlan` in `src/services/tauri.ts`):
+
+- `id`: from plan JSON `id`
+- `title`: optional trimmed title
+- `goal`: from plan JSON `goal`
+- `tasks[]`: `{ id, name, status }` with status from state join (default `"pending"`)
+- `currentTaskId`: currently always `null` (`current_task_id: None` in core)
+- `planPath`: workspace-relative path when available (for example `plans/document-forge-module/plan.json`)
+- `updatedAtMs`: plan file modified timestamp in Unix milliseconds
+
+Additional list behavior:
+
+- Duplicate plan ids are deduplicated by keeping the newest `updatedAtMs`.
+- Final results are sorted descending by `updatedAtMs`.

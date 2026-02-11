@@ -139,4 +139,85 @@ describe("ralph-loop template scripts", () => {
     const nextPrompt = await fs.readFile(generatedExecutePromptPath, "utf8");
     expect(nextPrompt).toContain("All tasks completed");
   });
+
+  it("post-step truncates oversized state notes before validation", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-ralph-loop-"));
+    const workspaceRoot = tempRoot;
+    const templateRoot = path.resolve(
+      "src-tauri/resources/forge/templates/ralph-loop",
+    );
+    const planId = "notes-truncation";
+    const planDir = path.join(tempRoot, "plans", planId);
+    const planPath = path.join(planDir, "plan.json");
+    const statePath = path.join(planDir, "state.json");
+    const progressPath = path.join(planDir, "progress.md");
+    const generatedPlanMdPath = path.join(planDir, "plan.md");
+    const generatedExecutePromptPath = path.join(planDir, "execute-prompt.md");
+    const contextPath = path.join(tempRoot, "context.json");
+
+    await fs.mkdir(planDir, { recursive: true });
+
+    await fs.writeFile(
+      planPath,
+      `${JSON.stringify(
+        {
+          $schema: "plan-v1",
+          id: planId,
+          title: "Notes Truncation",
+          goal: "Ensure oversized notes are truncated automatically by post-step.",
+          context: {
+            tech_stack: ["Node.js"],
+            constraints: ["Keep state files valid."],
+          },
+          tasks: [
+            {
+              id: "task-1",
+              name: "Task with long notes",
+              description: "Exercise notes truncation behavior for state validation safety.",
+              depends_on: [],
+              files: ["README.md"],
+              verification: ["State remains valid."],
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const context = {
+      workspaceRoot,
+      templateRoot,
+      planId,
+      planDir,
+      planPath,
+      statePath,
+      progressPath,
+      generatedPlanMdPath,
+      generatedExecutePromptPath,
+      todayIso: "2026-02-10",
+    };
+    await fs.writeFile(contextPath, `${JSON.stringify(context, null, 2)}\n`, "utf8");
+
+    const postPlanScript = path.join(templateRoot, "scripts", "post-plan.mjs");
+    await execFileAsync(process.execPath, [postPlanScript, "--context", contextPath]);
+
+    const state = JSON.parse(await fs.readFile(statePath, "utf8"));
+    state.tasks[0].notes = "x".repeat(2200);
+    state.tasks[0].phases[0].notes = "y".repeat(1000);
+    await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+
+    const postStepScript = path.join(templateRoot, "scripts", "post-step.mjs");
+    await execFileAsync(process.execPath, [postStepScript, "--context", contextPath]);
+
+    const normalizedState = JSON.parse(await fs.readFile(statePath, "utf8"));
+    expect(normalizedState.tasks[0].notes.length).toBeLessThanOrEqual(2000);
+    expect(normalizedState.tasks[0].notes).toContain("[truncated]");
+    expect(normalizedState.tasks[0].phases[0].notes.length).toBeLessThanOrEqual(800);
+    expect(normalizedState.tasks[0].phases[0].notes).toContain("[truncated]");
+
+    const prompt = await fs.readFile(generatedExecutePromptPath, "utf8");
+    expect(prompt).toContain("YOUR TASK: task-1");
+  });
 });

@@ -5,8 +5,8 @@ import { requireFlagValue } from "./lib/args.mjs";
 import { readContext } from "./lib/context.mjs";
 import { renderExecutePrompt } from "./lib/execute.mjs";
 import { planStateToMarkdown } from "./lib/markdown.mjs";
-import { validatePlan, validateStateAgainstPlan } from "./lib/plan.mjs";
-import { readJsonFile } from "./lib/state.mjs";
+import { normalizeStateNotes, validatePlan, validateStateAgainstPlan } from "./lib/plan.mjs";
+import { readJsonFile, writeJsonFile } from "./lib/state.mjs";
 
 async function main() {
   const contextPath = requireFlagValue(process.argv.slice(2), "context");
@@ -18,7 +18,11 @@ async function main() {
   const phases = await readJsonFile(path.join(ctx.templateRoot, "phases.json"));
   const templatePhases = Array.isArray(phases?.phases) ? phases.phases : [];
 
-  const state = await readJsonFile(ctx.statePath);
+  const rawState = await readJsonFile(ctx.statePath);
+  const { state, changed: notesWereTruncated } = normalizeStateNotes(rawState);
+  if (notesWereTruncated) {
+    await writeJsonFile(ctx.statePath, state);
+  }
   const stateErrors = validateStateAgainstPlan(state, plan, templatePhases);
   if (stateErrors.length > 0) {
     throw new Error(`state.json is invalid:\n${stateErrors.join("\n")}`);

@@ -57,6 +57,21 @@ function expectArrayOfStrings(errors, value, path, { minItems } = {}) {
 
 const PLAN_ID_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
 const TASK_ID_RE = /^task-[0-9]+$/;
+const NOTES_TRUNCATED_SUFFIX = " ... [truncated]";
+
+export const STATE_SUMMARY_MAX_LENGTH = 300;
+export const TASK_NOTES_MAX_LENGTH = 2000;
+export const PHASE_NOTES_MAX_LENGTH = 800;
+
+function truncateNotes(value, maxLength) {
+  if (typeof value !== "string" || value.length <= maxLength) {
+    return [value, false];
+  }
+  const suffix = maxLength > NOTES_TRUNCATED_SUFFIX.length ? NOTES_TRUNCATED_SUFFIX : "";
+  const sliceLength = Math.max(maxLength - suffix.length, 0);
+  const truncated = `${value.slice(0, sliceLength)}${suffix}`;
+  return [truncated, true];
+}
 
 function parseTaskNumber(taskId) {
   const match = /^task-([0-9]+)$/.exec(taskId);
@@ -266,6 +281,41 @@ export function buildInitialState(plan, templatePhases) {
   };
 }
 
+export function normalizeStateNotes(state) {
+  let changed = false;
+
+  if (!isPlainObject(state) || !Array.isArray(state.tasks)) {
+    return { state, changed };
+  }
+
+  for (const task of state.tasks) {
+    if (!isPlainObject(task)) {
+      continue;
+    }
+    const [taskNotes, taskChanged] = truncateNotes(task.notes, TASK_NOTES_MAX_LENGTH);
+    if (taskChanged) {
+      task.notes = taskNotes;
+      changed = true;
+    }
+
+    if (!Array.isArray(task.phases)) {
+      continue;
+    }
+    for (const phase of task.phases) {
+      if (!isPlainObject(phase)) {
+        continue;
+      }
+      const [phaseNotes, phaseChanged] = truncateNotes(phase.notes, PHASE_NOTES_MAX_LENGTH);
+      if (phaseChanged) {
+        phase.notes = phaseNotes;
+        changed = true;
+      }
+    }
+  }
+
+  return { state, changed };
+}
+
 export function validateStateAgainstPlan(state, plan, templatePhases) {
   const errors = [];
 
@@ -284,7 +334,7 @@ export function validateStateAgainstPlan(state, plan, templatePhases) {
   if (!Number.isInteger(state.iteration) || state.iteration < 0) {
     pushError(errors, "state.iteration", "Expected integer >= 0");
   }
-  expectString(errors, state.summary, "state.summary", { maxLength: 300 });
+  expectString(errors, state.summary, "state.summary", { maxLength: STATE_SUMMARY_MAX_LENGTH });
 
   expectArray(errors, state.tasks, "state.tasks", { minItems: 1 });
 
@@ -315,7 +365,7 @@ export function validateStateAgainstPlan(state, plan, templatePhases) {
       if (!Number.isInteger(entry.attempts) || entry.attempts < 0) {
         pushError(errors, `${entryPath}.attempts`, "Expected integer >= 0");
       }
-      expectString(errors, entry.notes, `${entryPath}.notes`, { maxLength: 500 });
+      expectString(errors, entry.notes, `${entryPath}.notes`, { maxLength: TASK_NOTES_MAX_LENGTH });
 
       if (entry.commit_sha != null && typeof entry.commit_sha !== "string") {
         pushError(errors, `${entryPath}.commit_sha`, "Expected string or null");
@@ -348,7 +398,7 @@ export function validateStateAgainstPlan(state, plan, templatePhases) {
           if (!Number.isInteger(phase.attempts) || phase.attempts < 0) {
             pushError(errors, `${phasePath}.attempts`, "Expected integer >= 0");
           }
-          expectString(errors, phase.notes, `${phasePath}.notes`, { maxLength: 800 });
+          expectString(errors, phase.notes, `${phasePath}.notes`, { maxLength: PHASE_NOTES_MAX_LENGTH });
         }
       }
     }
