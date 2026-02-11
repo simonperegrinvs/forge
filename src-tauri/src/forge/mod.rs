@@ -206,6 +206,28 @@ pub(crate) async fn forge_prepare_execution(
 }
 
 #[tauri::command]
+pub(crate) async fn forge_reset_execution_progress(
+    workspace_id: String,
+    plan_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if remote_backend::is_remote_mode(&state).await {
+        remote_backend::call_remote(
+            &state,
+            app,
+            "forge_reset_execution_progress",
+            json!({ "workspaceId": workspace_id, "planId": plan_id }),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    forge_execute_core::forge_reset_execution_progress_core(&workspace_root, &plan_id).await
+}
+
+#[tauri::command]
 pub(crate) async fn forge_get_next_phase_prompt(
     workspace_id: String,
     plan_id: String,

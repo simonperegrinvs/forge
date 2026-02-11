@@ -23,6 +23,17 @@ const templatesClient: ForgeTemplatesClient = {
 
 describe("Forge plans", () => {
   it("lists workspace plans and enables the execute toggle after selecting one", async () => {
+    const getNextPhasePrompt = vi
+      .fn<ForgePlansClient["getNextPhasePrompt"]>()
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "execute prompt",
+      })
+      .mockResolvedValueOnce(null);
+
     const plansClient: ForgePlansClient = {
       listPlans: async () => [
         {
@@ -43,15 +54,11 @@ describe("Forge plans", () => {
       ],
       getPlanPrompt: async () => "",
       prepareExecution: async () => {},
-      getNextPhasePrompt: async () => ({
-        planId: "alpha",
-        taskId: "task-1",
-        phaseId: "implementation",
-        isLastPhase: true,
-        promptText: "execute prompt",
-      }),
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt,
       getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
       runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
       connectWorkspace: async () => {},
       startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
       sendUserMessage: async () => ({}),
@@ -66,15 +73,15 @@ describe("Forge plans", () => {
       />,
     );
 
-    const runButton = await screen.findByRole("button", { name: "Run plan" });
+    const runButton = await screen.findByRole("button", { name: "Resume plan" });
     expect(runButton.hasAttribute("disabled")).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /Click to select/i }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
 
-    expect(screen.getByRole("button", { name: "Run plan" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: "Resume plan" }).hasAttribute("disabled")).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Run plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
     expect(await screen.findByRole("button", { name: "Pause plan" })).toBeTruthy();
   });
 
@@ -106,9 +113,11 @@ describe("Forge plans", () => {
       listPlans,
       getPlanPrompt: async () => "",
       prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
       getNextPhasePrompt: async () => null,
       getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
       runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
       connectWorkspace: async () => {},
       startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
       sendUserMessage: async () => ({}),
@@ -148,9 +157,11 @@ describe("Forge plans", () => {
       listPlans: async () => [],
       getPlanPrompt,
       prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
       getNextPhasePrompt: async () => null,
       getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
       runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
       connectWorkspace,
       startThread,
       sendUserMessage,
@@ -248,9 +259,11 @@ describe("Forge plans", () => {
       ],
       getPlanPrompt: async () => "",
       prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
       getNextPhasePrompt,
       getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
       runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
       connectWorkspace: async () => {},
       startThread,
       sendUserMessage,
@@ -268,7 +281,7 @@ describe("Forge plans", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
-    fireEvent.click(screen.getByRole("button", { name: "Run plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
 
     await waitFor(() => expect(startThread).toHaveBeenCalledTimes(2));
     expect(startThread).toHaveBeenNthCalledWith(1, "ws-1");
@@ -295,7 +308,8 @@ describe("Forge plans", () => {
     expect(onSelectThread).toHaveBeenNthCalledWith(2, "ws-1", "thread-2");
   });
 
-  it("shows in-progress task and phase while execution is running", async () => {
+  it("pauses by interrupting the active forge turn", async () => {
+    const interruptTurn = vi.fn(async () => ({}));
     const plansClient: ForgePlansClient = {
       listPlans: async () => [
         {
@@ -310,6 +324,7 @@ describe("Forge plans", () => {
       ],
       getPlanPrompt: async () => "",
       prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
       getNextPhasePrompt: async () => ({
         planId: "alpha",
         taskId: "task-1",
@@ -319,6 +334,55 @@ describe("Forge plans", () => {
       }),
       getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
       runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn,
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({ result: { turn: { id: "turn-1" } } }),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Pause plan" }));
+
+    await waitFor(() =>
+      expect(interruptTurn).toHaveBeenCalledWith("ws-1", "thread-1", "turn-1"),
+    );
+  });
+
+  it("cleans plan progress from the selected state with confirmation", async () => {
+    const listPlans = vi.fn<ForgePlansClient["listPlans"]>().mockResolvedValue([
+      {
+        id: "alpha",
+        title: "Alpha",
+        goal: "Alpha goal",
+        tasks: [{ id: "task-1", name: "Task 1", status: "pending" }],
+        currentTaskId: null,
+        planPath: "plans/alpha/plan.json",
+        updatedAtMs: 0,
+      },
+    ]);
+    const resetExecutionProgress = vi.fn(async () => {});
+    const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const plansClient: ForgePlansClient = {
+      listPlans,
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress,
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
       connectWorkspace: async () => {},
       startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
       sendUserMessage: async () => ({}),
@@ -335,7 +399,60 @@ describe("Forge plans", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
-    fireEvent.click(screen.getByRole("button", { name: "Run plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clean progress" }));
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(resetExecutionProgress).toHaveBeenCalledWith("ws-1", "alpha"),
+    );
+    await waitFor(() => expect(listPlans).toHaveBeenCalledTimes(2));
+
+    confirmMock.mockRestore();
+  });
+
+  it("shows in-progress task and phase while execution is running", async () => {
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [{ id: "task-1", name: "Task 1", status: "pending" }],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => ({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 1 prompt",
+      }),
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
 
     expect(await screen.findByText("Phase implementation in progress")).toBeTruthy();
     const row = screen.getByText("Task 1").closest("li");
@@ -343,4 +460,73 @@ describe("Forge plans", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
   });
+
+  it(
+    "retries a stuck phase and surfaces an error after timeout exhaustion",
+    async () => {
+      vi.useFakeTimers();
+
+      const getNextPhasePrompt = vi
+        .fn<ForgePlansClient["getNextPhasePrompt"]>()
+        .mockResolvedValue({
+          planId: "alpha",
+          taskId: "task-1",
+          phaseId: "implementation",
+          isLastPhase: true,
+          promptText: "task 1 prompt",
+        });
+      const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
+
+      const plansClient: ForgePlansClient = {
+        listPlans: async () => [
+          {
+            id: "alpha",
+            title: "Alpha",
+            goal: "Alpha goal",
+            tasks: [{ id: "task-1", name: "Task 1", status: "pending" }],
+            currentTaskId: null,
+            planPath: "plans/alpha/plan.json",
+            updatedAtMs: 0,
+          },
+        ],
+        getPlanPrompt: async () => "",
+        prepareExecution: async () => {},
+        resetExecutionProgress: async () => {},
+        getNextPhasePrompt,
+        getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+        runPhaseChecks: async () => ({ ok: true, results: [] }),
+        interruptTurn: async () => ({}),
+        connectWorkspace: async () => {},
+        startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+        sendUserMessage,
+      };
+
+      render(
+        <Forge
+          activeWorkspaceId="ws-1"
+          templatesClient={templatesClient}
+          plansClient={plansClient}
+          collaborationModes={[]}
+        />,
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Click to select/i }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+      fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300000);
+      });
+
+      expect(screen.getByRole("alert").textContent).toContain(
+        "did not reach a final status after 3 prompt attempts",
+      );
+      expect(sendUserMessage).toHaveBeenCalledTimes(3);
+      expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy();
+    },
+    15000,
+  );
 });

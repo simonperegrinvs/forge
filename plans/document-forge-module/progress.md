@@ -1,2 +1,4 @@
 - 2026-02-11 iter 0: Bundled Forge templates live under `src-tauri/resources/forge/templates` (dev fallback via `env!(\"CARGO_MANIFEST_DIR\")`).
 - 2026-02-11 iter 0: `forge_plans_core::resolve_state_path` checks four state filename patterns and only applies task statuses when `"$schema"` is `state-v2`; otherwise statuses default to `pending`.
+- 2026-02-11 iter 0: `forge_templates_core::normalize_plan_prompt` rewrites `.agent/skills/` to `.agents/skills/`, rewrites flat `plans/<plan_id>.json` paths to `plans/<plan_id>/plan.json`, and prepends `@plan` when absent.
+- 2026-02-11 iter 0: Forge template/plan IPC is registered in `src-tauri/src/lib.rs`, locally served by `src-tauri/src/forge/mod.rs`, and remote-proxied by method name through `src-tauri/src/remote_backend/mod.rs` to daemon RPC dispatch in `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`.

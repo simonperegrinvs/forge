@@ -64,9 +64,10 @@ between tasks - everything you need is below.
    - Set this phase `status` to `completed` (or `blocked`/`failed` if truly stuck).
    - Increment this phase `attempts`.
    - Append concise notes (paths/decisions).
-   - Keep task `status` consistent with phase statuses.
+   - Keep task `status` as `in_progress` while handing off to Forge checks.
 3. Forge will run backend checks after your phase is marked complete.
-   - If checks fail, fix the issues and rerun this phase.
+   - Forge finalizes phase/task completion statuses after checks.
+   - If checks fail, Forge reopens the phase and you retry.
    - If checks pass on the last phase, Forge creates the task commit and records `commit_sha`.
 4. Do NOT run `git` commands yourself in execute mode.
    - Do NOT run `git add`, `git commit`, `git commit --amend`, or `git push`.
@@ -76,6 +77,7 @@ between tasks - everything you need is below.
 ```text
 [[cm_forge:done plan={{plan_id}} task={{current_task_id}} phase={{current_phase_id}}]]
 ```
+   - Use the exact `plan/task/phase` values shown above. Do not reuse marker values from a previous task or phase.
 
 ---
 
@@ -83,7 +85,7 @@ between tasks - everything you need is below.
 
 Update `plans/{{plan_id}}/state.json` following these rules:
 
-1. Set your task's `status` to `completed` (or `failed` if truly stuck after multiple attempts)
+1. Keep your task's `status` as `in_progress` while implementing (or `failed` if truly stuck after multiple attempts)
 2. Write `notes` explaining what you did - file paths, decisions, config values. The next
    iteration has no memory of you; these notes are its only link to your work.
 3. Update `summary` - orient a newcomer: what's done, what's next (max 300 chars)

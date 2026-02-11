@@ -618,7 +618,7 @@ mod tests {
             .find(|tpl| tpl.id == "ralph-loop")
             .expect("ralph-loop template present");
         assert_eq!(ralph.title, "Ralph Loop");
-        assert_eq!(ralph.version, "0.2.0");
+        assert_eq!(ralph.version, "0.2.1");
     }
 
     #[test]
@@ -634,7 +634,7 @@ mod tests {
             .expect("install template");
         assert_eq!(lock.schema, "forge-template-lock-v1");
         assert_eq!(lock.installed_template_id, "ralph-loop");
-        assert_eq!(lock.installed_template_version, "0.2.0");
+        assert_eq!(lock.installed_template_version, "0.2.1");
         assert!(lock.installed_files.contains(&"template.json".to_string()));
         assert!(lock
             .installed_files

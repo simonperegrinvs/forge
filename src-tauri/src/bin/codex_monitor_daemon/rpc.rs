@@ -310,6 +310,14 @@ pub(super) async fn handle_rpc_request(
             state.forge_prepare_execution(workspace_id, plan_id).await?;
             Ok(json!({ "ok": true }))
         }
+        "forge_reset_execution_progress" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            state
+                .forge_reset_execution_progress(workspace_id, plan_id)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
         "forge_get_next_phase_prompt" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let plan_id = parse_string(&params, "planId")?;

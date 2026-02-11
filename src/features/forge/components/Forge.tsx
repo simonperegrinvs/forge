@@ -28,12 +28,14 @@ import {
 } from "../../../services/tauri";
 import {
   connectWorkspace,
+  forgeResetExecutionProgress,
   forgeGetNextPhasePrompt,
   forgeGetPlanPrompt,
   forgeGetPhaseStatus,
   forgeListPlans,
   forgePrepareExecution,
   forgeRunPhaseChecks,
+  interruptTurn,
   sendUserMessage,
   startThread,
 } from "../../../services/tauri";
@@ -50,6 +52,7 @@ export type ForgePlansClient = {
   listPlans: (workspaceId: string) => Promise<ForgeWorkspacePlan[]>;
   getPlanPrompt: (workspaceId: string) => Promise<string>;
   prepareExecution: (workspaceId: string, planId: string) => Promise<void>;
+  resetExecutionProgress: (workspaceId: string, planId: string) => Promise<void>;
   getNextPhasePrompt: (
     workspaceId: string,
     planId: string,
@@ -66,6 +69,11 @@ export type ForgePlansClient = {
     taskId: string,
     phaseId: string,
   ) => Promise<ForgeRunPhaseChecksResponse>;
+  interruptTurn: (
+    workspaceId: string,
+    threadId: string,
+    turnId: string,
+  ) => Promise<unknown>;
   connectWorkspace: (workspaceId: string) => Promise<void>;
   startThread: (workspaceId: string) => Promise<any>;
   sendUserMessage: (
@@ -89,9 +97,11 @@ const defaultForgePlansClient: ForgePlansClient = {
   listPlans: forgeListPlans,
   getPlanPrompt: forgeGetPlanPrompt,
   prepareExecution: forgePrepareExecution,
+  resetExecutionProgress: forgeResetExecutionProgress,
   getNextPhasePrompt: forgeGetNextPhasePrompt,
   getPhaseStatus: forgeGetPhaseStatus,
   runPhaseChecks: forgeRunPhaseChecks,
+  interruptTurn,
   connectWorkspace,
   startThread,
   sendUserMessage,
@@ -296,9 +306,11 @@ export function Forge({
   const listPlans = plansApi.listPlans;
   const getPlanPrompt = plansApi.getPlanPrompt;
   const prepareExecution = plansApi.prepareExecution;
+  const resetExecutionProgress = plansApi.resetExecutionProgress;
   const getNextPhasePrompt = plansApi.getNextPhasePrompt;
   const getPhaseStatus = plansApi.getPhaseStatus;
   const runPhaseChecks = plansApi.runPhaseChecks;
+  const interruptPlanTurn = plansApi.interruptTurn;
   const connectWorkspaceToRun = plansApi.connectWorkspace;
   const startThreadForPlan = plansApi.startThread;
   const sendUserMessageToPlanThread = plansApi.sendUserMessage;
@@ -352,6 +364,7 @@ export function Forge({
   const [templates, setTemplates] = useState<ForgeBundledTemplateInfo[]>([]);
   const [installedTemplate, setInstalledTemplate] = useState<ForgeTemplateLock | null>(null);
   const [workspacePlans, setWorkspacePlans] = useState<ForgeWorkspacePlan[]>([]);
+  const [isResettingProgress, setIsResettingProgress] = useState(false);
   const plansInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -395,6 +408,24 @@ export function Forge({
     };
   }, [activeWorkspaceId, getInstalledTemplate]);
 
+  const refreshPlans = useCallback(
+    async (workspaceId: string) => {
+      if (plansInFlightRef.current) {
+        return;
+      }
+      plansInFlightRef.current = true;
+      try {
+        const next = await listPlans(workspaceId);
+        setWorkspacePlans(next);
+      } catch (error) {
+        console.warn("Failed to load Forge plans.", { error });
+      } finally {
+        plansInFlightRef.current = false;
+      }
+    },
+    [listPlans],
+  );
+
   useEffect(() => {
     let cancelled = false;
     if (!activeWorkspaceId) {
@@ -405,21 +436,10 @@ export function Forge({
     }
 
     const loadPlans = async () => {
-      if (plansInFlightRef.current) {
+      if (cancelled) {
         return;
       }
-      plansInFlightRef.current = true;
-      try {
-        const next = await listPlans(activeWorkspaceId);
-        if (cancelled) {
-          return;
-        }
-        setWorkspacePlans(next);
-      } catch (error) {
-        console.warn("Failed to load Forge plans.", { error });
-      } finally {
-        plansInFlightRef.current = false;
-      }
+      await refreshPlans(activeWorkspaceId);
     };
 
     void loadPlans();
@@ -428,7 +448,7 @@ export function Forge({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeWorkspaceId, listPlans]);
+  }, [activeWorkspaceId, refreshPlans]);
 
   const plans: ForgePlan[] = useMemo(() => {
     return workspacePlans.map((plan) => {
@@ -515,6 +535,7 @@ export function Forge({
   const {
     isExecuting,
     runningInfo,
+    lastError,
     startExecution,
     pauseExecution,
   } = useForgeExecution({
@@ -524,6 +545,7 @@ export function Forge({
     getNextPhasePrompt,
     getPhaseStatus,
     runPhaseChecks,
+    interruptTurn: interruptPlanTurn,
     startThread: startThreadForPlan,
     sendUserMessage: sendUserMessageToPlanThread,
     onSelectThread,
@@ -532,7 +554,7 @@ export function Forge({
 
   useEffect(() => {
     // Avoid executing the wrong plan if the user switches selection mid-run.
-    pauseExecution();
+    void pauseExecution();
   }, [pauseExecution, selectedPlanId]);
 
   const handleNewPlan = useCallback(async () => {
@@ -596,6 +618,42 @@ export function Forge({
     sendUserMessageToPlanThread,
     sendUserMessageToThread,
     startThreadForPlan,
+  ]);
+
+  const handleCleanProgress = useCallback(async () => {
+    const workspaceId = activeWorkspaceId?.trim();
+    const planId = selectedPlanId?.trim();
+    if (!workspaceId || !planId || isResettingProgress) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Clean progress will reset this plan's state and derived execution files. Continue?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsResettingProgress(true);
+    try {
+      if (isExecuting) {
+        await pauseExecution();
+      }
+      await resetExecutionProgress(workspaceId, planId);
+      await refreshPlans(workspaceId);
+    } catch (error) {
+      console.warn("Forge clean progress failed.", { error });
+    } finally {
+      setIsResettingProgress(false);
+    }
+  }, [
+    activeWorkspaceId,
+    isExecuting,
+    isResettingProgress,
+    pauseExecution,
+    refreshPlans,
+    resetExecutionProgress,
+    selectedPlanId,
   ]);
 
   return (
@@ -689,21 +747,21 @@ export function Forge({
               className="ghost forge-execute-toggle"
               data-tauri-drag-region="false"
               disabled={!selectedPlan}
-              aria-label={isExecuting ? "Pause plan" : "Run plan"}
+              aria-label={isExecuting ? "Pause plan" : "Resume plan"}
               aria-pressed={isExecuting}
               title={
                 !selectedPlan
                   ? "Select a plan to run"
                   : isExecuting
                     ? "Pause plan"
-                    : "Run plan"
+                    : "Resume plan"
               }
               onClick={() => {
                 if (!selectedPlan) {
                   return;
                 }
                 if (isExecuting) {
-                  pauseExecution();
+                  void pauseExecution();
                   return;
                 }
                 void startExecution(selectedPlan.id);
@@ -711,9 +769,31 @@ export function Forge({
             >
               {isExecuting ? <Pause aria-hidden /> : <Play aria-hidden />}
             </button>
+            <button
+              type="button"
+              className="ghost forge-reset-progress"
+              data-tauri-drag-region="false"
+              disabled={!selectedPlan || isResettingProgress}
+              aria-label="Clean progress"
+              title={
+                !selectedPlan
+                  ? "Select a plan to clean progress"
+                  : "Reset state and derived execution files"
+              }
+              onClick={() => {
+                void handleCleanProgress();
+              }}
+            >
+              {isResettingProgress ? "Resetting..." : "Clean progress"}
+            </button>
           </div>
         </div>
         <div className="forge-execution">
+          {lastError ? (
+            <div className="forge-execution-error" role="alert">
+              {lastError}
+            </div>
+          ) : null}
           {selectedPlan ? (
             <ol className="forge-items">
               {selectedPlan.items.map((item, index) => {

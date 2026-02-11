@@ -17,7 +17,7 @@ describe("Forge templates", () => {
 
     const templatesClient: ForgeTemplatesClient = {
       listBundledTemplates: async () => [
-        { id: "ralph-loop", title: "Ralph Loop", version: "0.2.0" },
+        { id: "ralph-loop", title: "Ralph Loop", version: "0.2.1" },
       ],
       getInstalledTemplate: async (workspaceId) => {
         calls.getInstalled.push(workspaceId);
@@ -28,7 +28,7 @@ describe("Forge templates", () => {
         return {
           schema: "forge-template-lock-v1",
           installedTemplateId: templateId,
-          installedTemplateVersion: "0.2.0",
+          installedTemplateVersion: "0.2.1",
           installedAtIso: "2026-02-10T00:00:00Z",
           installedFiles: ["template.json"],
         };
@@ -88,7 +88,7 @@ describe("Forge templates", () => {
 
     const templatesClient: ForgeTemplatesClient = {
       listBundledTemplates: async () => [
-        { id: "ralph-loop", title: "Ralph Loop", version: "0.2.0" },
+        { id: "ralph-loop", title: "Ralph Loop", version: "0.2.1" },
       ],
       getInstalledTemplate: async () => {
         if (!installed) {
@@ -104,11 +104,11 @@ describe("Forge templates", () => {
       },
       installTemplate: async (workspaceId, templateId) => {
         calls.install.push({ workspaceId, templateId });
-        installed = { id: templateId, version: "0.2.0" };
+        installed = { id: templateId, version: "0.2.1" };
         return {
           schema: "forge-template-lock-v1",
           installedTemplateId: templateId,
-          installedTemplateVersion: "0.2.0",
+          installedTemplateVersion: "0.2.1",
           installedAtIso: "2026-02-10T00:00:00Z",
           installedFiles: ["template.json"],
         };

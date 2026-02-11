@@ -33,6 +33,11 @@ type ForgeExecutionArgs = {
     taskId: string,
     phaseId: string,
   ) => Promise<ForgeRunPhaseChecksResponse>;
+  interruptTurn: (
+    workspaceId: string,
+    threadId: string,
+    turnId: string,
+  ) => Promise<unknown>;
   startThread: (workspaceId: string) => Promise<unknown>;
   sendUserMessage: (
     workspaceId: string,
@@ -54,11 +59,14 @@ type ForgeRunningInfo = {
 type ForgeExecutionState = {
   isExecuting: boolean;
   runningInfo: ForgeRunningInfo | null;
+  lastError: string | null;
   startExecution: (planId: string) => Promise<void>;
-  pauseExecution: () => void;
+  pauseExecution: () => Promise<void>;
 };
 
 const POLL_INTERVAL_MS = 1200;
+const PHASE_COMPLETION_TIMEOUT_MS = 90_000;
+const MAX_PHASE_REPROMPTS = 2;
 
 function isFinalPhaseStatus(status: ForgeExecutionStatusLike): boolean {
   const normalized = status.trim().toLowerCase();
@@ -69,9 +77,21 @@ function isFinalPhaseStatus(status: ForgeExecutionStatusLike): boolean {
     normalized === "success" ||
     normalized === "succeeded" ||
     normalized === "failed" ||
+    normalized === "blocked" ||
     normalized === "error" ||
     normalized === "canceled" ||
     normalized === "cancelled"
+  );
+}
+
+function isCompletedPhaseStatus(status: ForgeExecutionStatusLike): boolean {
+  const normalized = status.trim().toLowerCase();
+  return (
+    normalized === "completed" ||
+    normalized === "complete" ||
+    normalized === "done" ||
+    normalized === "success" ||
+    normalized === "succeeded"
   );
 }
 
@@ -83,6 +103,22 @@ function extractThreadId(response: unknown): string | null {
   const directThread = (response as { thread?: { id?: unknown } }).thread;
   const nestedThread = (response as { result?: { thread?: { id?: unknown } } }).result?.thread;
   const id = directThread?.id ?? nestedThread?.id ?? null;
+  if (typeof id !== "string") {
+    return null;
+  }
+
+  const trimmed = id.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function extractTurnId(response: unknown): string | null {
+  if (!response || typeof response !== "object") {
+    return null;
+  }
+
+  const directTurn = (response as { turn?: { id?: unknown } }).turn;
+  const nestedTurn = (response as { result?: { turn?: { id?: unknown } } }).result?.turn;
+  const id = directTurn?.id ?? nestedTurn?.id ?? null;
   if (typeof id !== "string") {
     return null;
   }
@@ -104,6 +140,7 @@ export function useForgeExecution({
   getNextPhasePrompt,
   getPhaseStatus,
   runPhaseChecks,
+  interruptTurn,
   startThread,
   sendUserMessage,
   onSelectThread,
@@ -111,22 +148,44 @@ export function useForgeExecution({
 }: ForgeExecutionArgs): ForgeExecutionState {
   const [isExecuting, setIsExecuting] = useState(false);
   const [runningInfo, setRunningInfo] = useState<ForgeRunningInfo | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const runTokenRef = useRef(0);
   const activeRunRef = useRef<number | null>(null);
+  const activeTurnRef = useRef<{
+    workspaceId: string;
+    threadId: string;
+    turnId: string;
+  } | null>(null);
 
   const clearExecutionState = useCallback(() => {
     setIsExecuting(false);
     setRunningInfo(null);
   }, []);
 
-  const pauseExecution = useCallback(() => {
+  const pauseExecution = useCallback(async () => {
+    const activeTurn = activeTurnRef.current;
+    activeTurnRef.current = null;
     runTokenRef.current += 1;
     activeRunRef.current = null;
     clearExecutionState();
-  }, [clearExecutionState]);
+    if (!activeTurn) {
+      return;
+    }
+
+    try {
+      await interruptTurn(
+        activeTurn.workspaceId,
+        activeTurn.threadId,
+        activeTurn.turnId || "pending",
+      );
+    } catch (error) {
+      console.warn("Forge execution pause interrupt failed.", { error });
+    }
+  }, [clearExecutionState, interruptTurn]);
 
   useEffect(() => {
     return () => {
+      activeTurnRef.current = null;
       runTokenRef.current += 1;
       activeRunRef.current = null;
     };
@@ -143,10 +202,39 @@ export function useForgeExecution({
       const token = runTokenRef.current + 1;
       runTokenRef.current = token;
       activeRunRef.current = token;
+      activeTurnRef.current = null;
       setIsExecuting(true);
       setRunningInfo(null);
+      setLastError(null);
 
       const isActive = () => activeRunRef.current === token && runTokenRef.current === token;
+      const phaseRepromptAttempts = new Map<string, number>();
+
+      const waitForPhaseFinalStatus = async (
+        taskId: string,
+        phaseId: string,
+      ): Promise<ForgeExecutionStatusLike | null> => {
+        const startedAtMs = Date.now();
+        while (isActive()) {
+          const phaseStatus = await getPhaseStatus(
+            workspace,
+            normalizedPlanId,
+            taskId,
+            phaseId,
+          );
+          if (!isActive()) {
+            return null;
+          }
+          if (isFinalPhaseStatus(phaseStatus.status)) {
+            return phaseStatus.status;
+          }
+          if (Date.now() - startedAtMs >= PHASE_COMPLETION_TIMEOUT_MS) {
+            return null;
+          }
+          await wait(POLL_INTERVAL_MS);
+        }
+        return null;
+      };
 
       try {
         await connectWorkspace(workspace);
@@ -161,7 +249,6 @@ export function useForgeExecution({
 
         let activeThreadId: string | null = null;
         let activeThreadTaskId: string | null = null;
-        const completedPhases = new Set<string>();
 
         while (isActive()) {
           const phase = await getNextPhasePrompt(workspace, normalizedPlanId);
@@ -171,12 +258,7 @@ export function useForgeExecution({
           if (!phase) {
             return;
           }
-
-          const phaseKey = `${phase.taskId}:${phase.phaseId}`;
-          if (completedPhases.has(phaseKey)) {
-            await wait(POLL_INTERVAL_MS);
-            continue;
-          }
+          const phaseAttemptKey = `${phase.taskId}:${phase.phaseId}`;
 
           if (!activeThreadId || activeThreadTaskId !== phase.taskId) {
             const threadResponse = await startThread(workspace);
@@ -200,30 +282,50 @@ export function useForgeExecution({
           if (!threadId) {
             throw new Error("Forge execution thread id is missing.");
           }
-          await sendUserMessage(workspace, threadId, phase.promptText, { collaborationMode });
+          activeTurnRef.current = {
+            workspaceId: workspace,
+            threadId,
+            turnId: "pending",
+          };
+          const turnResponse = await sendUserMessage(workspace, threadId, phase.promptText, {
+            collaborationMode,
+          });
           if (!isActive()) {
             return;
           }
+          const turnId = extractTurnId(turnResponse);
+          if (turnId && activeTurnRef.current?.threadId === threadId) {
+            activeTurnRef.current = {
+              workspaceId: workspace,
+              threadId,
+              turnId,
+            };
+          }
 
-          while (isActive()) {
-            const phaseStatus = await getPhaseStatus(
-              workspace,
-              normalizedPlanId,
-              phase.taskId,
-              phase.phaseId,
-            );
-            if (!isActive()) {
-              return;
+          const lastPhaseStatus = await waitForPhaseFinalStatus(phase.taskId, phase.phaseId);
+
+          if (!isActive()) {
+            return;
+          }
+          activeTurnRef.current = null;
+
+          if (lastPhaseStatus === null) {
+            const attempts = (phaseRepromptAttempts.get(phaseAttemptKey) ?? 0) + 1;
+            if (attempts > MAX_PHASE_REPROMPTS) {
+              throw new Error(
+                `Phase ${phase.taskId}/${phase.phaseId} did not reach a final status after ${MAX_PHASE_REPROMPTS + 1} prompt attempts. Regenerate progress in plans/${normalizedPlanId}/state.json and retry.`,
+              );
             }
-            if (isFinalPhaseStatus(phaseStatus.status)) {
-              break;
-            }
+            phaseRepromptAttempts.set(phaseAttemptKey, attempts);
             await wait(POLL_INTERVAL_MS);
+            continue;
           }
 
-          if (!isActive()) {
-            return;
+          if (!isCompletedPhaseStatus(lastPhaseStatus ?? "")) {
+            await wait(POLL_INTERVAL_MS);
+            continue;
           }
+          phaseRepromptAttempts.delete(phaseAttemptKey);
 
           const checks = await runPhaseChecks(
             workspace,
@@ -235,11 +337,18 @@ export function useForgeExecution({
             await wait(POLL_INTERVAL_MS);
             continue;
           }
-          completedPhases.add(phaseKey);
         }
       } catch (error) {
+        const message =
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message.trim()
+            : String(error);
+        setLastError(`Forge execution failed: ${message}`);
         console.warn("Forge execution failed.", { error });
       } finally {
+        if (activeRunRef.current === token) {
+          activeTurnRef.current = null;
+        }
         if (activeRunRef.current === token) {
           activeRunRef.current = null;
           clearExecutionState();
@@ -265,9 +374,10 @@ export function useForgeExecution({
     () => ({
       isExecuting,
       runningInfo,
+      lastError,
       startExecution,
       pauseExecution,
     }),
-    [isExecuting, pauseExecution, runningInfo, startExecution],
+    [isExecuting, lastError, pauseExecution, runningInfo, startExecution],
   );
 }

@@ -1056,6 +1056,13 @@ export async function forgePrepareExecution(
   await invoke("forge_prepare_execution", { workspaceId, planId });
 }
 
+export async function forgeResetExecutionProgress(
+  workspaceId: string,
+  planId: string,
+): Promise<void> {
+  await invoke("forge_reset_execution_progress", { workspaceId, planId });
+}
+
 export async function forgeGetNextPhasePrompt(
   workspaceId: string,
   planId: string,

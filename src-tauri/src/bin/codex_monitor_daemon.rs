@@ -704,6 +704,15 @@ impl DaemonState {
         forge_execute_core::forge_prepare_execution_core(&workspace_root, &plan_id).await
     }
 
+    async fn forge_reset_execution_progress(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+    ) -> Result<(), String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_reset_execution_progress_core(&workspace_root, &plan_id).await
+    }
+
     async fn forge_get_next_phase_prompt(
         &self,
         workspace_id: String,

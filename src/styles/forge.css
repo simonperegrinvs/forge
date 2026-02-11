@@ -45,6 +45,7 @@
 .forge-card-header-actions {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -107,6 +108,19 @@
   cursor: not-allowed;
 }
 
+.forge-reset-progress {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.forge-reset-progress:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .forge-plan-toggle {
   flex: 1;
   min-width: 0;
@@ -132,7 +146,9 @@
 .forge-template-toggle:hover,
 .forge-template-toggle:focus-visible,
 .forge-execute-toggle:hover,
-.forge-execute-toggle:focus-visible {
+.forge-execute-toggle:focus-visible,
+.forge-reset-progress:hover,
+.forge-reset-progress:focus-visible {
   color: var(--text-strong);
   background: var(--surface-hover);
   box-shadow: none;
@@ -181,6 +197,16 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.forge-execution-error {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-error) 35%, transparent);
+  border-radius: 8px;
+  padding: 7px 9px;
 }
 
 .forge-items {

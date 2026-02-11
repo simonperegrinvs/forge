@@ -84,7 +84,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("Click to select")).toBeTruthy();
     expect(screen.queryByText("Add a workspace to start.")).toBeNull();
 
-    const runButton = screen.getByRole("button", { name: "Run plan" });
+    const runButton = screen.getByRole("button", { name: "Resume plan" });
     expect(runButton.hasAttribute("disabled")).toBe(true);
   });
 
