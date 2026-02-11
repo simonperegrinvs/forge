@@ -1,7 +1,7 @@
 # Mode: execute
 
 You are executing a single task from a development plan. Your context is cleared
-between iterations - everything you need is below.
+between tasks - everything you need is below.
 
 ---
 
@@ -30,6 +30,12 @@ between iterations - everything you need is below.
 
 {{current_task_description}}
 
+## Current phase: {{current_phase_id}} - {{current_phase_title}}
+
+**Phase goal:** {{current_phase_goal}}
+
+{{current_phase_description}}
+
 **Files:** {{current_task_files}}
 
 **Verification:**
@@ -40,6 +46,26 @@ between iterations - everything you need is below.
 
 **What dependencies produced:**
 {{dependency_notes}}
+
+---
+
+## Phase protocol (important)
+
+1. Implement the current phase for the current task.
+2. If this is the last phase of the task:
+   - Create exactly 1 git commit for the task before marking the phase complete.
+   - Record the commit SHA in `plans/{{plan_id}}/state.json` under your task's `commit_sha`.
+   - If checks fail after committing, fix issues and **amend the same commit** (do not create a second commit).
+3. Update `plans/{{plan_id}}/state.json`:
+   - Set this phase `status` to `completed` (or `blocked`/`failed` if truly stuck).
+   - Increment this phase `attempts`.
+   - Append concise notes (paths/decisions).
+   - Keep task `status` consistent with phase statuses.
+4. End your message with this exact single line marker:
+
+```text
+[[cm_forge:done plan={{plan_id}} task={{current_task_id}} phase={{current_phase_id}}]]
+```
 
 ---
 

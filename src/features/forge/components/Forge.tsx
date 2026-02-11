@@ -20,16 +20,24 @@ import {
   forgeListBundledTemplates,
   forgeUninstallTemplate,
   type ForgeBundledTemplateInfo,
+  type ForgeNextPhasePrompt,
+  type ForgePhaseStatus,
+  type ForgeRunPhaseChecksResponse,
   type ForgeTemplateLock,
   type ForgeWorkspacePlan,
 } from "../../../services/tauri";
 import {
   connectWorkspace,
+  forgeGetNextPhasePrompt,
   forgeGetPlanPrompt,
+  forgeGetPhaseStatus,
   forgeListPlans,
+  forgePrepareExecution,
+  forgeRunPhaseChecks,
   sendUserMessage,
   startThread,
 } from "../../../services/tauri";
+import { useForgeExecution } from "../hooks/useForgeExecution";
 
 export type ForgeTemplatesClient = {
   listBundledTemplates: () => Promise<ForgeBundledTemplateInfo[]>;
@@ -41,6 +49,23 @@ export type ForgeTemplatesClient = {
 export type ForgePlansClient = {
   listPlans: (workspaceId: string) => Promise<ForgeWorkspacePlan[]>;
   getPlanPrompt: (workspaceId: string) => Promise<string>;
+  prepareExecution: (workspaceId: string, planId: string) => Promise<void>;
+  getNextPhasePrompt: (
+    workspaceId: string,
+    planId: string,
+  ) => Promise<ForgeNextPhasePrompt | null>;
+  getPhaseStatus: (
+    workspaceId: string,
+    planId: string,
+    taskId: string,
+    phaseId: string,
+  ) => Promise<ForgePhaseStatus>;
+  runPhaseChecks: (
+    workspaceId: string,
+    planId: string,
+    taskId: string,
+    phaseId: string,
+  ) => Promise<ForgeRunPhaseChecksResponse>;
   connectWorkspace: (workspaceId: string) => Promise<void>;
   startThread: (workspaceId: string) => Promise<any>;
   sendUserMessage: (
@@ -63,6 +88,10 @@ const defaultForgeTemplatesClient: ForgeTemplatesClient = {
 const defaultForgePlansClient: ForgePlansClient = {
   listPlans: forgeListPlans,
   getPlanPrompt: forgeGetPlanPrompt,
+  prepareExecution: forgePrepareExecution,
+  getNextPhasePrompt: forgeGetNextPhasePrompt,
+  getPhaseStatus: forgeGetPhaseStatus,
+  runPhaseChecks: forgeRunPhaseChecks,
   connectWorkspace,
   startThread,
   sendUserMessage,
@@ -265,6 +294,10 @@ export function Forge({
   const uninstallTemplate = client.uninstallTemplate;
   const listPlans = plansApi.listPlans;
   const getPlanPrompt = plansApi.getPlanPrompt;
+  const prepareExecution = plansApi.prepareExecution;
+  const getNextPhasePrompt = plansApi.getNextPhasePrompt;
+  const getPhaseStatus = plansApi.getPhaseStatus;
+  const runPhaseChecks = plansApi.runPhaseChecks;
   const connectWorkspaceToRun = plansApi.connectWorkspace;
   const startThreadForPlan = plansApi.startThread;
   const sendUserMessageToPlanThread = plansApi.sendUserMessage;
@@ -452,18 +485,12 @@ export function Forge({
   const planMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  const [isExecuting, setIsExecuting] = useState(false);
 
   useDismissibleMenu({
     isOpen: planMenuOpen,
     containerRef: planMenuRef,
     onClose: () => setPlanMenuOpen(false),
   });
-
-  useEffect(() => {
-    // Keep the execute/pause UI from “sticking” when the user switches plans.
-    setIsExecuting(false);
-  }, [selectedPlanId]);
 
   useEffect(() => {
     if (!selectedPlanId) {
@@ -473,6 +500,38 @@ export function Forge({
       setSelectedPlanId(null);
     }
   }, [plans, selectedPlanId]);
+
+  const executionMode = useMemo(() => {
+    const mode =
+      findCollaborationMode("default") ??
+      findCollaborationMode("code") ??
+      collaborationModes[0] ??
+      null;
+    return buildCollaborationModePayloadFor(mode);
+  }, [buildCollaborationModePayloadFor, collaborationModes, findCollaborationMode]);
+
+  const {
+    isExecuting,
+    runningInfo,
+    startExecution,
+    pauseExecution,
+  } = useForgeExecution({
+    workspaceId: activeWorkspaceId,
+    connectWorkspace: connectWorkspaceToRun,
+    prepareExecution,
+    getNextPhasePrompt,
+    getPhaseStatus,
+    runPhaseChecks,
+    startThread: startThreadForPlan,
+    sendUserMessage: sendUserMessageToPlanThread,
+    onSelectThread,
+    collaborationMode: executionMode,
+  });
+
+  useEffect(() => {
+    // Avoid executing the wrong plan if the user switches selection mid-run.
+    pauseExecution();
+  }, [pauseExecution, selectedPlanId]);
 
   const handleNewPlan = useCallback(async () => {
     if (!activeWorkspaceId) {
@@ -615,7 +674,11 @@ export function Forge({
           <div className="forge-card-header-left">
             <div className="forge-card-title">Execution</div>
             <div className="forge-card-subtitle">
-              {selectedPlan ? selectedPlan.name : "No plan selected"}
+              {selectedPlan
+                ? runningInfo
+                  ? `${selectedPlan.name} • ${runningInfo.taskId}/${runningInfo.phaseId}`
+                  : selectedPlan.name
+                : "No plan selected"}
             </div>
           </div>
           <div className="forge-card-header-actions">
@@ -637,8 +700,11 @@ export function Forge({
                 if (!selectedPlan) {
                   return;
                 }
-                // TODO(Forge): wire real plan execution and pausing.
-                setIsExecuting((prev) => !prev);
+                if (isExecuting) {
+                  pauseExecution();
+                  return;
+                }
+                void startExecution(selectedPlan.id);
               }}
             >
               {isExecuting ? <Pause aria-hidden /> : <Play aria-hidden />}

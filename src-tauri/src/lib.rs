@@ -220,6 +220,10 @@ pub fn run() {
             forge::forge_uninstall_template,
             forge::forge_list_plans,
             forge::forge_get_plan_prompt,
+            forge::forge_prepare_execution,
+            forge::forge_get_next_phase_prompt,
+            forge::forge_get_phase_status,
+            forge::forge_run_phase_checks,
             is_mobile_runtime
         ])
         .build(tauri::generate_context!())

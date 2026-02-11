@@ -219,24 +219,54 @@ export function validatePlan(plan) {
   }
 }
 
-export function buildInitialState(plan) {
+function validatePhaseList(errors, phases, path) {
+  expectArray(errors, phases, path, { minItems: 1 });
+  if (!Array.isArray(phases)) {
+    return;
+  }
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i];
+    const phasePath = `${path}[${i}]`;
+    if (!isPlainObject(phase)) {
+      pushError(errors, phasePath, "Expected object");
+      continue;
+    }
+    expectNoExtraKeys(
+      errors,
+      phase,
+      ["id", "title", "order", "iconId", "goal", "description", "checks"],
+      phasePath,
+    );
+    expectString(errors, phase.id, `${phasePath}.id`, { minLength: 1, maxLength: 64 });
+    expectString(errors, phase.title, `${phasePath}.title`, { minLength: 1, maxLength: 80 });
+  }
+}
+
+export function buildInitialState(plan, templatePhases) {
   const tasks = Array.isArray(plan?.tasks) ? plan.tasks : [];
+  const phases = Array.isArray(templatePhases) ? templatePhases : [];
   return {
-    $schema: "state-v1",
+    $schema: "state-v2",
     plan_id: plan.id,
     iteration: 0,
     summary: "",
-    current_task: null,
     tasks: tasks.map((task) => ({
       id: task.id,
       status: "pending",
       attempts: 0,
       notes: "",
+      commit_sha: null,
+      phases: phases.map((phase) => ({
+        id: phase.id,
+        status: "pending",
+        attempts: 0,
+        notes: "",
+      })),
     })),
   };
 }
 
-export function validateStateAgainstPlan(state, plan) {
+export function validateStateAgainstPlan(state, plan, templatePhases) {
   const errors = [];
 
   if (!isPlainObject(state)) {
@@ -244,9 +274,9 @@ export function validateStateAgainstPlan(state, plan) {
     return errors;
   }
 
-  expectNoExtraKeys(errors, state, ["$schema", "plan_id", "iteration", "summary", "current_task", "tasks"], "state");
-  if (state.$schema !== "state-v1") {
-    pushError(errors, "state.$schema", 'Expected "state-v1"');
+  expectNoExtraKeys(errors, state, ["$schema", "plan_id", "iteration", "summary", "tasks"], "state");
+  if (state.$schema !== "state-v2") {
+    pushError(errors, "state.$schema", 'Expected "state-v2"');
   }
   if (state.plan_id !== plan.id) {
     pushError(errors, "state.plan_id", `Expected ${plan.id}`);
@@ -256,10 +286,6 @@ export function validateStateAgainstPlan(state, plan) {
   }
   expectString(errors, state.summary, "state.summary", { maxLength: 300 });
 
-  if (state.current_task != null && typeof state.current_task !== "string") {
-    pushError(errors, "state.current_task", "Expected string or null");
-  }
-
   expectArray(errors, state.tasks, "state.tasks", { minItems: 1 });
 
   const planTasks = Array.isArray(plan?.tasks) ? plan.tasks : [];
@@ -268,8 +294,10 @@ export function validateStateAgainstPlan(state, plan) {
   }
 
   const allowedStatus = new Set(["pending", "in_progress", "completed", "blocked", "failed"]);
-  let inProgressCount = 0;
-  let inProgressId = null;
+  validatePhaseList(errors, templatePhases, "templatePhases");
+  const expectedPhaseIds = Array.isArray(templatePhases)
+    ? templatePhases.map((p) => String(p.id ?? "")).filter(Boolean)
+    : [];
 
   if (Array.isArray(state.tasks)) {
     for (let i = 0; i < state.tasks.length; i++) {
@@ -279,7 +307,7 @@ export function validateStateAgainstPlan(state, plan) {
         pushError(errors, entryPath, "Expected object");
         continue;
       }
-      expectNoExtraKeys(errors, entry, ["id", "status", "attempts", "notes"], entryPath);
+      expectNoExtraKeys(errors, entry, ["id", "status", "attempts", "notes", "commit_sha", "phases"], entryPath);
       expectString(errors, entry.id, `${entryPath}.id`, { pattern: TASK_ID_RE });
       if (typeof entry.status !== "string" || !allowedStatus.has(entry.status)) {
         pushError(errors, `${entryPath}.status`, "Invalid status");
@@ -289,26 +317,41 @@ export function validateStateAgainstPlan(state, plan) {
       }
       expectString(errors, entry.notes, `${entryPath}.notes`, { maxLength: 500 });
 
-      if (entry.status === "in_progress") {
-        inProgressCount++;
-        inProgressId = entry.id;
+      if (entry.commit_sha != null && typeof entry.commit_sha !== "string") {
+        pushError(errors, `${entryPath}.commit_sha`, "Expected string or null");
       }
 
       if (planTasks[i]?.id && entry.id !== planTasks[i].id) {
         pushError(errors, entryPath, `Task id mismatch at index ${i} (expected ${planTasks[i].id})`);
       }
-    }
-  }
 
-  if (inProgressCount > 1) {
-    pushError(errors, "state.tasks", "At most one task may be in_progress");
-  }
-  if (inProgressCount === 1) {
-    if (state.current_task !== inProgressId) {
-      pushError(errors, "state.current_task", "Must match the in_progress task id");
+      expectArray(errors, entry.phases, `${entryPath}.phases`, { minItems: 1 });
+      if (Array.isArray(entry.phases) && expectedPhaseIds.length > 0 && entry.phases.length !== expectedPhaseIds.length) {
+        pushError(errors, `${entryPath}.phases`, "Must match templatePhases length");
+      }
+      if (Array.isArray(entry.phases)) {
+        for (let j = 0; j < entry.phases.length; j++) {
+          const phase = entry.phases[j];
+          const phasePath = `${entryPath}.phases[${j}]`;
+          if (!isPlainObject(phase)) {
+            pushError(errors, phasePath, "Expected object");
+            continue;
+          }
+          expectNoExtraKeys(errors, phase, ["id", "status", "attempts", "notes"], phasePath);
+          expectString(errors, phase.id, `${phasePath}.id`, { minLength: 1, maxLength: 64 });
+          if (expectedPhaseIds[j] && phase.id !== expectedPhaseIds[j]) {
+            pushError(errors, `${phasePath}.id`, `Phase id mismatch at index ${j} (expected ${expectedPhaseIds[j]})`);
+          }
+          if (typeof phase.status !== "string" || !allowedStatus.has(phase.status)) {
+            pushError(errors, `${phasePath}.status`, "Invalid status");
+          }
+          if (!Number.isInteger(phase.attempts) || phase.attempts < 0) {
+            pushError(errors, `${phasePath}.attempts`, "Expected integer >= 0");
+          }
+          expectString(errors, phase.notes, `${phasePath}.notes`, { maxLength: 800 });
+        }
+      }
     }
-  } else if (state.current_task != null) {
-    pushError(errors, "state.current_task", "Must be null when no task is in_progress");
   }
 
   return errors;

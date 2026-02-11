@@ -960,6 +960,34 @@ export type ForgeWorkspacePlan = {
   updatedAtMs: number;
 };
 
+export type ForgeNextPhasePrompt = {
+  planId: string;
+  taskId: string;
+  phaseId: string;
+  isLastPhase: boolean;
+  promptText: string;
+};
+
+export type ForgePhaseStatus = {
+  status: string;
+  commitSha?: string | null;
+};
+
+export type ForgePhaseCheckResult = {
+  id: string;
+  title: string;
+  exitCode: number;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+};
+
+export type ForgeRunPhaseChecksResponse = {
+  ok: boolean;
+  results: ForgePhaseCheckResult[];
+};
+
 export async function forgeListBundledTemplates(): Promise<ForgeBundledTemplateInfo[]> {
   try {
     return await invoke<ForgeBundledTemplateInfo[]>("forge_list_bundled_templates");
@@ -1019,4 +1047,49 @@ export async function forgeListPlans(workspaceId: string): Promise<ForgeWorkspac
 
 export async function forgeGetPlanPrompt(workspaceId: string): Promise<string> {
   return invoke<string>("forge_get_plan_prompt", { workspaceId });
+}
+
+export async function forgePrepareExecution(
+  workspaceId: string,
+  planId: string,
+): Promise<void> {
+  await invoke("forge_prepare_execution", { workspaceId, planId });
+}
+
+export async function forgeGetNextPhasePrompt(
+  workspaceId: string,
+  planId: string,
+): Promise<ForgeNextPhasePrompt | null> {
+  return invoke<ForgeNextPhasePrompt | null>("forge_get_next_phase_prompt", {
+    workspaceId,
+    planId,
+  });
+}
+
+export async function forgeGetPhaseStatus(
+  workspaceId: string,
+  planId: string,
+  taskId: string,
+  phaseId: string,
+): Promise<ForgePhaseStatus> {
+  return invoke<ForgePhaseStatus>("forge_get_phase_status", {
+    workspaceId,
+    planId,
+    taskId,
+    phaseId,
+  });
+}
+
+export async function forgeRunPhaseChecks(
+  workspaceId: string,
+  planId: string,
+  taskId: string,
+  phaseId: string,
+): Promise<ForgeRunPhaseChecksResponse> {
+  return invoke<ForgeRunPhaseChecksResponse>("forge_run_phase_checks", {
+    workspaceId,
+    planId,
+    taskId,
+    phaseId,
+  });
 }

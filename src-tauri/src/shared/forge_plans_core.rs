@@ -45,12 +45,12 @@ struct PlanTaskV1 {
 struct StateV1 {
     #[serde(rename = "$schema")]
     schema: String,
-    current_task: Option<String>,
-    tasks: Vec<StateTaskV1>,
+    #[serde(default)]
+    tasks: Vec<StateTaskV2>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct StateTaskV1 {
+struct StateTaskV2 {
     id: String,
     status: String,
 }
@@ -180,11 +180,11 @@ pub(crate) fn list_plans_core(workspace_root: &Path) -> Result<Vec<ForgeWorkspac
             .unwrap_or(0);
 
         let state_path = resolve_state_path(&plans_dir, &path, plan_id);
-        let (current_task_id, task_status_by_id) = if let Some(state_path) = state_path {
+        let task_status_by_id = if let Some(state_path) = state_path {
             let raw = fs::read_to_string(&state_path).ok();
             if let Some(raw) = raw {
                 if let Ok(state) = serde_json::from_str::<StateV1>(&raw) {
-                    if state.schema.trim() == "state-v1" {
+                    if state.schema.trim() == "state-v2" {
                         let mut map = HashMap::new();
                         for task in state.tasks {
                             let id = task.id.trim();
@@ -197,23 +197,18 @@ pub(crate) fn list_plans_core(workspace_root: &Path) -> Result<Vec<ForgeWorkspac
                             }
                             map.insert(id.to_string(), status.to_string());
                         }
-                        let current = state
-                            .current_task
-                            .as_ref()
-                            .map(|value| value.trim().to_string())
-                            .filter(|value| !value.is_empty());
-                        (current, map)
+                        map
                     } else {
-                        (None, HashMap::new())
+                        HashMap::new()
                     }
                 } else {
-                    (None, HashMap::new())
+                    HashMap::new()
                 }
             } else {
-                (None, HashMap::new())
+                HashMap::new()
             }
         } else {
-            (None, HashMap::new())
+            HashMap::new()
         };
 
         let tasks = parsed
@@ -248,7 +243,7 @@ pub(crate) fn list_plans_core(workspace_root: &Path) -> Result<Vec<ForgeWorkspac
             title,
             goal: parsed.goal,
             tasks,
-            current_task_id,
+            current_task_id: None,
             plan_path,
             updated_at_ms,
         });
@@ -308,11 +303,10 @@ mod tests {
         write_json(
             &root.join("plans").join("alpha.state.json"),
             serde_json::json!({
-              "$schema": "state-v1",
+              "$schema": "state-v2",
               "plan_id": "alpha",
               "iteration": 1,
               "summary": "",
-              "current_task": "task-1",
               "tasks": [{ "id": "task-1", "status": "in_progress", "attempts": 1, "notes": "" }]
             }),
         );
@@ -331,11 +325,10 @@ mod tests {
         write_json(
             &root.join("plans").join("nested").join("state.json"),
             serde_json::json!({
-              "$schema": "state-v1",
+              "$schema": "state-v2",
               "plan_id": "nested-plan",
               "iteration": 0,
               "summary": "",
-              "current_task": null,
               "tasks": [{ "id": "task-1", "status": "completed", "attempts": 1, "notes": "" }]
             }),
         );
@@ -352,7 +345,7 @@ mod tests {
         let alpha = plans.iter().find(|p| p.id == "alpha").expect("alpha");
         assert_eq!(alpha.title.as_deref(), Some("Alpha"));
         assert_eq!(alpha.goal, "Alpha goal");
-        assert_eq!(alpha.current_task_id.as_deref(), Some("task-1"));
+        assert_eq!(alpha.current_task_id.as_deref(), None);
         assert_eq!(alpha.tasks.len(), 1);
         assert_eq!(alpha.tasks[0].status, "in_progress");
 

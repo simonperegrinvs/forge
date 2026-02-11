@@ -43,11 +43,20 @@ function mapStateTasks(state) {
   return new Map(stateTasks.map((t) => [t.id, t]));
 }
 
+function isCompletedStatus(status) {
+  return typeof status === "string" && status.trim() === "completed";
+}
+
+function isTaskCompleted(stateTask) {
+  const phases = Array.isArray(stateTask?.phases) ? stateTask.phases : [];
+  return phases.length > 0 && phases.every((phase) => isCompletedStatus(phase.status));
+}
+
 function isDepsSatisfied(task, stateById) {
   const deps = Array.isArray(task?.depends_on) ? task.depends_on : [];
   for (const dep of deps) {
     const st = stateById.get(dep);
-    if (!st || st.status !== "completed") {
+    if (!st || !isTaskCompleted(st)) {
       return false;
     }
   }
@@ -63,7 +72,7 @@ export function findNextRunnableTask(plan, state) {
     if (!st) {
       continue;
     }
-    if (st.status !== "pending") {
+    if (isTaskCompleted(st)) {
       continue;
     }
     if (isDepsSatisfied(task, stateById)) {
@@ -71,6 +80,21 @@ export function findNextRunnableTask(plan, state) {
     }
   }
   return null;
+}
+
+function findNextRunnablePhase(stateTask) {
+  const phases = Array.isArray(stateTask?.phases) ? stateTask.phases : [];
+  for (const phase of phases) {
+    if (!isCompletedStatus(phase.status)) {
+      return phase;
+    }
+  }
+  return null;
+}
+
+function mapTemplatePhases(templatePhases) {
+  const phases = Array.isArray(templatePhases) ? templatePhases : [];
+  return new Map(phases.map((p) => [p.id, p]));
 }
 
 function dependencyNotesForTask(task, stateById) {
@@ -91,6 +115,7 @@ export function renderExecutePrompt({
   templateText,
   plan,
   state,
+  templatePhases,
   progressNotes,
   todayIso,
 }) {
@@ -103,6 +128,7 @@ export function renderExecutePrompt({
 
   const stateById = mapStateTasks(state);
   const current = findNextRunnableTask(plan, state);
+  const templatePhaseById = mapTemplatePhases(templatePhases);
 
   if (!current) {
     const values = {
@@ -117,6 +143,10 @@ export function renderExecutePrompt({
       current_task_id: "(none)",
       current_task_name: "All tasks completed",
       current_task_description: "No runnable pending task found. The plan may be complete.",
+      current_phase_id: "(none)",
+      current_phase_title: "",
+      current_phase_goal: "",
+      current_phase_description: "",
       current_task_files: "",
       current_task_verification: "",
       current_task_attempts: "0",
@@ -131,12 +161,22 @@ export function renderExecutePrompt({
     status: "pending",
     attempts: 0,
     notes: "",
+    phases: [],
   };
 
+  const phase = findNextRunnablePhase(st) ?? { id: "implementation", status: "pending", attempts: 0, notes: "" };
+  const phaseMeta = templatePhaseById.get(phase.id) ?? { id: phase.id, title: phase.id, goal: "", description: "" };
+
   const previousNotes = normalizeNotes(st.notes);
-  const currentTaskPreviousNotes = previousNotes
-    ? `\nPrevious notes:\n${previousNotes}`
-    : "";
+  const phaseNotes = normalizeNotes(phase.notes);
+  const notesBlocks = [];
+  if (previousNotes) {
+    notesBlocks.push(`Task notes:\n${previousNotes}`);
+  }
+  if (phaseNotes) {
+    notesBlocks.push(`Phase notes:\n${phaseNotes}`);
+  }
+  const currentTaskPreviousNotes = notesBlocks.length > 0 ? `\nPrevious notes:\n${notesBlocks.join("\n\n")}` : "";
 
   const values = {
     plan_id: plan.id ?? "",
@@ -150,9 +190,13 @@ export function renderExecutePrompt({
     current_task_id: current.id,
     current_task_name: current.name ?? "",
     current_task_description: current.description ?? "",
+    current_phase_id: phase.id ?? "",
+    current_phase_title: phaseMeta.title ?? phaseMeta.id ?? "",
+    current_phase_goal: phaseMeta.goal ?? "",
+    current_phase_description: phaseMeta.description ?? "",
     current_task_files: `\n${formatBulletList(current.files ?? [])}`,
     current_task_verification: formatBulletList(current.verification ?? []),
-    current_task_attempts: String(st.attempts ?? 0),
+    current_task_attempts: String(phase.attempts ?? 0),
     current_task_previous_notes: currentTaskPreviousNotes,
     dependency_notes: dependencyNotesForTask(current, stateById),
     date: todayIso,
@@ -160,4 +204,3 @@ export function renderExecutePrompt({
 
   return renderTemplate(templateText, values);
 }
-

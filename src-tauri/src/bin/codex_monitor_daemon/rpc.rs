@@ -304,6 +304,38 @@ pub(super) async fn handle_rpc_request(
             let prompt = state.forge_get_plan_prompt(workspace_id).await?;
             serde_json::to_value(prompt).map_err(|err| err.to_string())
         }
+        "forge_prepare_execution" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            state.forge_prepare_execution(workspace_id, plan_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "forge_get_next_phase_prompt" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            let prompt = state.forge_get_next_phase_prompt(workspace_id, plan_id).await?;
+            serde_json::to_value(prompt).map_err(|err| err.to_string())
+        }
+        "forge_get_phase_status" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            let task_id = parse_string(&params, "taskId")?;
+            let phase_id = parse_string(&params, "phaseId")?;
+            let status = state
+                .forge_get_phase_status(workspace_id, plan_id, task_id, phase_id)
+                .await?;
+            serde_json::to_value(status).map_err(|err| err.to_string())
+        }
+        "forge_run_phase_checks" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            let task_id = parse_string(&params, "taskId")?;
+            let phase_id = parse_string(&params, "phaseId")?;
+            let result = state
+                .forge_run_phase_checks(workspace_id, plan_id, task_id, phase_id)
+                .await?;
+            serde_json::to_value(result).map_err(|err| err.to_string())
+        }
         "get_app_settings" => {
             let settings = state.get_app_settings().await;
             serde_json::to_value(settings).map_err(|err| err.to_string())

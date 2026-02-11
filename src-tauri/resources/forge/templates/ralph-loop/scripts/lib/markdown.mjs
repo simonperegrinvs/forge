@@ -51,3 +51,67 @@ export function planToMarkdown(plan) {
 
   return `${lines.join("\n").trimEnd()}\n`;
 }
+
+function statusMark(status) {
+  switch (String(status ?? "").trim()) {
+    case "completed":
+      return "[x]";
+    case "in_progress":
+      return "[*]";
+    case "blocked":
+      return "[!]";
+    case "failed":
+      return "[~]";
+    case "pending":
+    default:
+      return "[ ]";
+  }
+}
+
+export function planStateToMarkdown(plan, state, templatePhases) {
+  const planTasks = Array.isArray(plan?.tasks) ? plan.tasks : [];
+  const stateTasks = Array.isArray(state?.tasks) ? state.tasks : [];
+  const stateById = new Map(stateTasks.map((t) => [t.id, t]));
+  const phases = Array.isArray(templatePhases) ? templatePhases : [];
+
+  const lines = [];
+  lines.push(`# Plan: ${plan?.id ?? ""}`);
+  lines.push("");
+  lines.push(`## Goal`);
+  lines.push("");
+  lines.push(String(plan?.goal ?? ""));
+  lines.push("");
+  lines.push("## Execution State");
+  lines.push("");
+  lines.push(`- Iteration: ${String(state?.iteration ?? 0)}`);
+  lines.push(`- Summary: ${String(state?.summary ?? "").trim()}`);
+  lines.push("");
+  lines.push("## Tasks");
+  lines.push("");
+
+  for (const task of planTasks) {
+    const st = stateById.get(task.id) ?? { status: "pending", notes: "", phases: [] };
+    lines.push(`### ${statusMark(st.status)} ${task.id}: ${task.name}`);
+    lines.push("");
+    const notes = String(st.notes ?? "").trim();
+    if (notes) {
+      lines.push("Notes:");
+      lines.push(formatBulletList(notes.split("\n").map((l) => l.trim()).filter(Boolean)));
+      lines.push("");
+    }
+
+    const stPhases = Array.isArray(st.phases) ? st.phases : [];
+    const phaseById = new Map(stPhases.map((p) => [p.id, p]));
+    if (phases.length > 0) {
+      lines.push("Phases:");
+      for (const phase of phases) {
+        const p = phaseById.get(phase.id) ?? { status: "pending", notes: "" };
+        const title = phase.title ?? phase.id;
+        lines.push(`- ${statusMark(p.status)} ${phase.id}: ${title}`);
+      }
+      lines.push("");
+    }
+  }
+
+  return `${lines.join("\n").trimEnd()}\n`;
+}

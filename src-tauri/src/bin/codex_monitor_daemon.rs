@@ -85,8 +85,9 @@ use backend::events::{AppServerEvent, EventSink, TerminalExit, TerminalOutput};
 use shared::codex_core::CodexLoginCancelState;
 use shared::prompts_core::{self, CustomPromptEntry};
 use shared::{
-    codex_aux_core, codex_core, files_core, forge_plans_core, forge_templates_core, git_core,
-    git_ui_core, local_usage_core, settings_core, workspaces_core, worktree_core,
+    codex_aux_core, codex_core, files_core, forge_execute_core, forge_plans_core,
+    forge_templates_core, git_core, git_ui_core, local_usage_core, settings_core, workspaces_core,
+    worktree_core,
 };
 use storage::{read_settings, read_workspaces};
 use types::{
@@ -692,6 +693,46 @@ impl DaemonState {
             eprintln!("forge_get_plan_prompt: failed to sync skills into .agents: {err}");
         }
         forge_templates_core::read_installed_template_plan_prompt_core(&workspace_root)
+    }
+
+    async fn forge_prepare_execution(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+    ) -> Result<(), String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_prepare_execution_core(&workspace_root, &plan_id).await
+    }
+
+    async fn forge_get_next_phase_prompt(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+    ) -> Result<Option<forge_execute_core::ForgeNextPhasePromptV1>, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_get_next_phase_prompt_core(&workspace_root, &plan_id).await
+    }
+
+    async fn forge_get_phase_status(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+        task_id: String,
+        phase_id: String,
+    ) -> Result<forge_execute_core::ForgePhaseStatusV1, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_get_phase_status_core(&workspace_root, &plan_id, &task_id, &phase_id)
+    }
+
+    async fn forge_run_phase_checks(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+        task_id: String,
+        phase_id: String,
+    ) -> Result<forge_execute_core::ForgeRunPhaseChecksResponseV1, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_run_phase_checks_core(&workspace_root, &plan_id, &task_id, &phase_id).await
     }
 
     async fn start_thread(&self, workspace_id: String) -> Result<Value, String> {

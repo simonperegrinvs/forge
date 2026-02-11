@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
 use crate::remote_backend;
+use crate::shared::forge_execute_core;
 use crate::shared::forge_plans_core;
 use crate::shared::forge_templates_core::{
     find_bundled_templates_root_near_exe, install_bundled_template_core,
@@ -180,4 +181,97 @@ pub(crate) async fn forge_get_plan_prompt(
         eprintln!("forge_get_plan_prompt: failed to sync skills into .agents: {err}");
     }
     read_installed_template_plan_prompt_core(&workspace_root)
+}
+
+#[tauri::command]
+pub(crate) async fn forge_prepare_execution(
+    workspace_id: String,
+    plan_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if remote_backend::is_remote_mode(&state).await {
+        remote_backend::call_remote(
+            &state,
+            app,
+            "forge_prepare_execution",
+            json!({ "workspaceId": workspace_id, "planId": plan_id }),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    forge_execute_core::forge_prepare_execution_core(&workspace_root, &plan_id).await
+}
+
+#[tauri::command]
+pub(crate) async fn forge_get_next_phase_prompt(
+    workspace_id: String,
+    plan_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Option<forge_execute_core::ForgeNextPhasePromptV1>, String> {
+    if remote_backend::is_remote_mode(&state).await {
+        let response = remote_backend::call_remote(
+            &state,
+            app,
+            "forge_get_next_phase_prompt",
+            json!({ "workspaceId": workspace_id, "planId": plan_id }),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|err| err.to_string());
+    }
+
+    let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    forge_execute_core::forge_get_next_phase_prompt_core(&workspace_root, &plan_id).await
+}
+
+#[tauri::command]
+pub(crate) async fn forge_get_phase_status(
+    workspace_id: String,
+    plan_id: String,
+    task_id: String,
+    phase_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<forge_execute_core::ForgePhaseStatusV1, String> {
+    if remote_backend::is_remote_mode(&state).await {
+        let response = remote_backend::call_remote(
+            &state,
+            app,
+            "forge_get_phase_status",
+            json!({ "workspaceId": workspace_id, "planId": plan_id, "taskId": task_id, "phaseId": phase_id }),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|err| err.to_string());
+    }
+
+    let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    forge_execute_core::forge_get_phase_status_core(&workspace_root, &plan_id, &task_id, &phase_id)
+}
+
+#[tauri::command]
+pub(crate) async fn forge_run_phase_checks(
+    workspace_id: String,
+    plan_id: String,
+    task_id: String,
+    phase_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<forge_execute_core::ForgeRunPhaseChecksResponseV1, String> {
+    if remote_backend::is_remote_mode(&state).await {
+        let response = remote_backend::call_remote(
+            &state,
+            app,
+            "forge_run_phase_checks",
+            json!({ "workspaceId": workspace_id, "planId": plan_id, "taskId": task_id, "phaseId": phase_id }),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|err| err.to_string());
+    }
+
+    let workspace_root = workspace_root_for_id(&state, &workspace_id).await?;
+    forge_execute_core::forge_run_phase_checks_core(&workspace_root, &plan_id, &task_id, &phase_id)
+        .await
 }

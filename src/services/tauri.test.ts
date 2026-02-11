@@ -122,19 +122,19 @@ describe("tauri invoke wrappers", () => {
 
   it("invokes forge template wrappers", async () => {
     const invokeMock = vi.mocked(invoke);
-    invokeMock.mockResolvedValueOnce([{ id: "ralph-loop", title: "Ralph Loop", version: "0.1.0" }]);
+    invokeMock.mockResolvedValueOnce([{ id: "ralph-loop", title: "Ralph Loop", version: "0.2.0" }]);
     invokeMock.mockResolvedValueOnce(null);
     invokeMock.mockResolvedValueOnce({
       schema: "forge-template-lock-v1",
       installedTemplateId: "ralph-loop",
-      installedTemplateVersion: "0.1.0",
+      installedTemplateVersion: "0.2.0",
       installedAtIso: "2026-02-10T00:00:00Z",
       installedFiles: ["template.json"],
     });
     invokeMock.mockResolvedValueOnce({ ok: true });
 
     await expect(forgeListBundledTemplates()).resolves.toEqual([
-      { id: "ralph-loop", title: "Ralph Loop", version: "0.1.0" },
+      { id: "ralph-loop", title: "Ralph Loop", version: "0.2.0" },
     ]);
     await expect(forgeGetInstalledTemplate("ws-1")).resolves.toBeNull();
     await expect(forgeInstallTemplate("ws-1", "ralph-loop")).resolves.toMatchObject({

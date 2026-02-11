@@ -2,7 +2,7 @@
   "schema": "forge-template-v1",
   "id": "ralph-loop",
   "title": "Ralph Loop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "files": [
     "template.json",
     "phases.json",
@@ -37,4 +37,3 @@
     }
   }
 }
-

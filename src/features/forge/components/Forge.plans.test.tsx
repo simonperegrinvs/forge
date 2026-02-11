@@ -42,6 +42,16 @@ describe("Forge plans", () => {
         },
       ],
       getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      getNextPhasePrompt: async () => ({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "execute prompt",
+      }),
+      getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
       connectWorkspace: async () => {},
       startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
       sendUserMessage: async () => ({}),
@@ -65,7 +75,7 @@ describe("Forge plans", () => {
     expect(screen.getByRole("button", { name: "Run plan" }).hasAttribute("disabled")).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Run plan" }));
-    expect(screen.getByRole("button", { name: "Pause plan" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Pause plan" })).toBeTruthy();
   });
 
   it("polls for new plans and updates the menu automatically", async () => {
@@ -95,6 +105,10 @@ describe("Forge plans", () => {
     const plansClient: ForgePlansClient = {
       listPlans,
       getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
       connectWorkspace: async () => {},
       startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
       sendUserMessage: async () => ({}),
@@ -133,6 +147,10 @@ describe("Forge plans", () => {
     const plansClient: ForgePlansClient = {
       listPlans: async () => [],
       getPlanPrompt,
+      prepareExecution: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
       connectWorkspace,
       startThread,
       sendUserMessage,
