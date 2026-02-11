@@ -1,231 +1,220 @@
-# Forge (CodexMonitor)
+# Forge (CodexMonitor) - Contributor Doc Outline
 
-Forge is CodexMonitor's "agent scaffolding" feature: it installs a bundled template into a workspace, exposes the template's prompts to the frontend, and enumerates runnable plans from the workspace so CodexMonitor can execute work in phases.
+This file is the implementation-backed outline for Forge module documentation. It maps every section to the current source of truth in code.
 
-This doc focuses on the Forge surface area. For the broader app/daemon/shared-core architecture, see `AGENTS.md`.
+For general app architecture, use `AGENTS.md`.
 
-## Code Map (Source Of Truth)
+## 1. What Forge Is In CodexMonitor
 
-- App (Tauri commands): `src-tauri/src/forge/mod.rs`
-- Shared cores (domain logic used by both app + daemon):
-  - Templates: `src-tauri/src/shared/forge_templates_core.rs`
-  - Plan listing: `src-tauri/src/shared/forge_plans_core.rs`
-  - Execution: `src-tauri/src/shared/forge_execute_core.rs`
-- Remote backend proxy: `src-tauri/src/remote_backend/mod.rs`
-- Daemon JSON-RPC:
-  - Request dispatch: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`
-  - Forge method implementations: `src-tauri/src/bin/codex_monitor_daemon.rs`
-- Frontend IPC wrapper: `src/services/tauri.ts`
+- Define Forge as template-backed workspace scaffolding plus plan lifecycle support.
+- Clarify the high-level flow:
+  - List bundled templates.
+  - Install/uninstall template into workspace `.agent/`.
+  - Read normalized plan prompt from installed template.
+  - List plan files and joined task statuses from `plans/`.
+- Reference implementation anchors:
+  - `src-tauri/src/forge/mod.rs`
+  - `src-tauri/src/shared/forge_templates_core.rs`
+  - `src-tauri/src/shared/forge_plans_core.rs`
+  - `src/services/tauri.ts`
 
-## Public IPC Surface (Tauri Commands)
+## 2. Public IPC Surface (Exact Commands + Implementation Paths)
 
-These commands are registered in `src-tauri/src/lib.rs` and implemented in `src-tauri/src/forge/mod.rs`.
+Document each command with app handler, shared core, frontend wrapper, remote proxy method, and daemon RPC branch.
 
-For each command: when remote mode is enabled, the app proxies the call via `remote_backend::call_remote(...)` in `src-tauri/src/remote_backend/mod.rs` using the same method string. The daemon handles that method in `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` and calls the same shared core.
+### 2.1 `forge_list_bundled_templates`
 
-### `forge_list_bundled_templates`
+- App command: `src-tauri/src/forge/mod.rs` -> `forge_list_bundled_templates`
+- Shared core: `src-tauri/src/shared/forge_templates_core.rs` -> `list_bundled_templates_core`
+- Frontend invoke wrapper: `src/services/tauri.ts` -> `forgeListBundledTemplates`
+- Registered in Tauri: `src-tauri/src/lib.rs`
+- Remote proxy method string: `"forge_list_bundled_templates"` via `src-tauri/src/remote_backend/mod.rs`
+- Daemon RPC branch: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`
+- Daemon method: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `forge_list_bundled_templates`
 
-- App command: `src-tauri/src/forge/mod.rs` (`forge_list_bundled_templates`)
-- Local core: `src-tauri/src/shared/forge_templates_core.rs` (`list_bundled_templates_core`)
-- Remote proxy method: `"forge_list_bundled_templates"` via `src-tauri/src/remote_backend/mod.rs` (`call_remote`)
-- Daemon handler: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` (`"forge_list_bundled_templates" => ...`)
-- Daemon implementation: `src-tauri/src/bin/codex_monitor_daemon.rs` (`forge_list_bundled_templates`)
+### 2.2 `forge_get_installed_template`
 
-### `forge_get_installed_template`
+- App command: `src-tauri/src/forge/mod.rs` -> `forge_get_installed_template`
+- Shared core: `src-tauri/src/shared/forge_templates_core.rs` -> `read_installed_template_lock_core`
+- Best-effort skill sync: `sync_agent_skills_into_repo_agents_dir_core`
+- Frontend wrapper: `src/services/tauri.ts` -> `forgeGetInstalledTemplate`
+- Registered in Tauri: `src-tauri/src/lib.rs`
+- Remote method string: `"forge_get_installed_template"` (params: `workspaceId`)
+- Daemon RPC branch: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`
+- Daemon method: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `forge_get_installed_template`
 
-- App command: `src-tauri/src/forge/mod.rs` (`forge_get_installed_template`)
-- Local core: `src-tauri/src/shared/forge_templates_core.rs` (`read_installed_template_lock_core`)
-- Side effect (best-effort): sync `.agent/skills/*` into `.agents/skills/*` via `src-tauri/src/shared/forge_templates_core.rs` (`sync_agent_skills_into_repo_agents_dir_core`)
-- Remote proxy method: `"forge_get_installed_template"`
-- Daemon handler: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` (`"forge_get_installed_template" => ...`)
-- Daemon implementation: `src-tauri/src/bin/codex_monitor_daemon.rs` (`forge_get_installed_template`)
+### 2.3 `forge_install_template`
 
-### `forge_install_template`
+- App command: `src-tauri/src/forge/mod.rs` -> `forge_install_template`
+- Shared core: `src-tauri/src/shared/forge_templates_core.rs` -> `install_bundled_template_core`
+- Best-effort skill sync: `sync_agent_skills_into_repo_agents_dir_core`
+- Frontend wrapper: `src/services/tauri.ts` -> `forgeInstallTemplate`
+- Registered in Tauri: `src-tauri/src/lib.rs`
+- Remote method string: `"forge_install_template"` (params: `workspaceId`, `templateId`)
+- Daemon RPC branch: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`
+- Daemon method: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `forge_install_template`
 
-- App command: `src-tauri/src/forge/mod.rs` (`forge_install_template`)
-- Local core: `src-tauri/src/shared/forge_templates_core.rs` (`install_bundled_template_core`)
-- Side effect (best-effort): sync `.agent/skills/*` into `.agents/skills/*` via `sync_agent_skills_into_repo_agents_dir_core`
-- Remote proxy method: `"forge_install_template"` (params include `workspaceId`, `templateId`)
-- Daemon handler: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` (`"forge_install_template" => ...`)
-- Daemon implementation: `src-tauri/src/bin/codex_monitor_daemon.rs` (`forge_install_template`)
+### 2.4 `forge_uninstall_template`
 
-### `forge_uninstall_template`
+- App command: `src-tauri/src/forge/mod.rs` -> `forge_uninstall_template`
+- Shared core: `src-tauri/src/shared/forge_templates_core.rs` -> `uninstall_template_core`
+- Frontend wrapper: `src/services/tauri.ts` -> `forgeUninstallTemplate`
+- Registered in Tauri: `src-tauri/src/lib.rs`
+- Remote method string: `"forge_uninstall_template"` (params: `workspaceId`)
+- Daemon RPC branch: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`
+- Daemon method: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `forge_uninstall_template`
 
-- App command: `src-tauri/src/forge/mod.rs` (`forge_uninstall_template`)
-- Local core: `src-tauri/src/shared/forge_templates_core.rs` (`uninstall_template_core`)
-- Remote proxy method: `"forge_uninstall_template"`
-- Daemon handler: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` (`"forge_uninstall_template" => ...`)
-- Daemon implementation: `src-tauri/src/bin/codex_monitor_daemon.rs` (`forge_uninstall_template`)
+### 2.5 `forge_list_plans`
 
-### `forge_list_plans`
+- App command: `src-tauri/src/forge/mod.rs` -> `forge_list_plans`
+- Shared core: `src-tauri/src/shared/forge_plans_core.rs` -> `list_plans_core`
+- Frontend wrapper: `src/services/tauri.ts` -> `forgeListPlans`
+- Registered in Tauri: `src-tauri/src/lib.rs`
+- Remote method string: `"forge_list_plans"` (params: `workspaceId`)
+- Daemon RPC branch: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`
+- Daemon method: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `forge_list_plans`
 
-- App command: `src-tauri/src/forge/mod.rs` (`forge_list_plans`)
-- Local core: `src-tauri/src/shared/forge_plans_core.rs` (`list_plans_core`)
-- Remote proxy method: `"forge_list_plans"`
-- Daemon handler: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` (`"forge_list_plans" => ...`)
-- Daemon implementation: `src-tauri/src/bin/codex_monitor_daemon.rs` (`forge_list_plans`)
+### 2.6 `forge_get_plan_prompt`
 
-### `forge_get_plan_prompt`
+- App command: `src-tauri/src/forge/mod.rs` -> `forge_get_plan_prompt`
+- Shared core: `src-tauri/src/shared/forge_templates_core.rs` -> `read_installed_template_plan_prompt_core`
+- Prompt normalization hook: `normalize_plan_prompt` in `src-tauri/src/shared/forge_templates_core.rs`
+- Best-effort skill sync: `sync_agent_skills_into_repo_agents_dir_core`
+- Frontend wrapper: `src/services/tauri.ts` -> `forgeGetPlanPrompt`
+- Registered in Tauri: `src-tauri/src/lib.rs`
+- Remote method string: `"forge_get_plan_prompt"` (params: `workspaceId`)
+- Daemon RPC branch: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`
+- Daemon method: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `forge_get_plan_prompt`
 
-- App command: `src-tauri/src/forge/mod.rs` (`forge_get_plan_prompt`)
-- Local core: `src-tauri/src/shared/forge_templates_core.rs` (`read_installed_template_plan_prompt_core`)
-- Side effect (best-effort): sync `.agent/skills/*` into `.agents/skills/*` via `sync_agent_skills_into_repo_agents_dir_core`
-- Remote proxy method: `"forge_get_plan_prompt"`
-- Daemon handler: `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` (`"forge_get_plan_prompt" => ...`)
-- Daemon implementation: `src-tauri/src/bin/codex_monitor_daemon.rs` (`forge_get_plan_prompt`)
+## 3. Local vs Remote Backend Behavior
 
-## Local vs Remote Backend Behavior
+- Local mode path:
+  - `src-tauri/src/forge/mod.rs` calls shared cores directly.
+- Remote mode gate:
+  - `src-tauri/src/remote_backend/mod.rs` -> `is_remote_mode` checks `BackendMode::Remote`.
+- Remote invocation path:
+  - `src-tauri/src/forge/mod.rs` -> `remote_backend::call_remote(...)`
+  - Method names are identical to Tauri command names (for example `"forge_list_plans"`).
+  - Param casing is camelCase (`workspaceId`, `templateId`).
+- RPC handling path:
+  - `src-tauri/src/bin/codex_monitor_daemon/rpc.rs` parses params and dispatches by method string.
+  - `src-tauri/src/bin/codex_monitor_daemon.rs` runs daemon-side methods that call the same shared cores.
+- Retry behavior note:
+  - Forge methods are in `can_retry_after_disconnect` in `src-tauri/src/remote_backend/mod.rs`.
 
-Remote mode is determined by `BackendMode::Remote` in app settings and checked by `remote_backend::is_remote_mode` in `src-tauri/src/remote_backend/mod.rs`.
+## 4. Workspace File Layout And Artifacts
 
-- Local mode: `src-tauri/src/forge/mod.rs` calls shared cores directly.
-- Remote mode: `src-tauri/src/forge/mod.rs` calls `remote_backend::call_remote` (`src-tauri/src/remote_backend/mod.rs`) with:
-  - The method name string (for example `"forge_list_plans"`)
-  - A JSON params object (for example `{ "workspaceId": "<id>" }`)
-- Daemon receives the JSON-RPC request and dispatches in `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`.
-- Daemon methods call the same shared cores as the app (see `src-tauri/src/bin/codex_monitor_daemon.rs`).
+Describe the exact workspace artifacts and writers/readers:
 
-## Workspace File Layout And Artifacts
+- `.agent/template-lock.json`
+  - Read: `read_installed_template_lock_core`
+  - Write: `install_bundled_template_core`
+- `.agent/templates/<templateId>/...`
+  - Created from bundled template `files` list in `install_bundled_template_core`
+  - Read for plan prompt via `read_installed_template_plan_prompt_core`
+- `.agent/skills/*`
+  - Mirrored from bundled `skills/*` during template install
+- `.agents/skills/*`
+  - Best-effort sync target used by Codex repo skill discovery
+  - Sync function: `sync_agent_skills_into_repo_agents_dir_core`
+  - Behavior: do not overwrite existing `.agents/skills/*` files
+- `plans/`
+  - Read by `src-tauri/src/shared/forge_plans_core.rs` -> `list_plans_core`
+  - Execution-related files consumed under `plans/<planId>/` by `src-tauri/src/shared/forge_execute_core.rs`
+- Git exclusion:
+  - `.agent/` entry added to `.git/info/exclude` by `ensure_git_info_exclude_contains`
 
-Forge reads and writes workspace-local artifacts under the workspace root.
+## 5. Bundled Template Structure And Manifest Fields
 
-- Installed template lock:
-  - Path: `<workspaceRoot>/.agent/template-lock.json`
-  - Read by: `src-tauri/src/shared/forge_templates_core.rs` (`read_installed_template_lock_core`)
-  - Written by: `install_bundled_template_core`
-- Installed template files:
-  - Path: `<workspaceRoot>/.agent/templates/<templateId>/...`
-  - Created by: `install_bundled_template_core`
-  - Read by: `read_installed_template_plan_prompt_core` and execution cores
-- Template-provided skills:
-  - Installed into: `<workspaceRoot>/.agent/skills/*` (mirrors any bundled `skills/*` files)
-  - Synced into: `<workspaceRoot>/.agents/skills/*` (Codex repo-scoped skills directory)
-  - Sync implementation: `src-tauri/src/shared/forge_templates_core.rs` (`sync_agent_skills_into_repo_agents_dir_core`)
-  - Sync behavior: best-effort; does not overwrite existing `.agents/skills` files
-- Plans:
-  - Root: `<workspaceRoot>/plans/`
-  - Listed by: `src-tauri/src/shared/forge_plans_core.rs` (`list_plans_core`)
-  - Execution expects nested layout for a specific plan id:
-    - `<workspaceRoot>/plans/<planId>/plan.json`
-    - `<workspaceRoot>/plans/<planId>/state.json`
-    - `src-tauri/src/shared/forge_execute_core.rs` (`forge_prepare_execution_core`, `forge_get_next_phase_prompt_core`, ...)
-- Git exclusion (workspace is a git repo):
-  - Forge adds `.agent/` to `<workspaceRoot>/.git/info/exclude` (no `.gitignore` edits)
-  - Implementation: `src-tauri/src/shared/forge_templates_core.rs` (`ensure_git_info_exclude_contains`)
+### 5.1 Bundle Roots (App + Daemon Resolution)
 
-## Bundled Templates
-
-### Bundle Roots (App vs Daemon)
-
-Bundled templates are discovered via:
-
-- App: `src-tauri/src/forge/mod.rs` (`bundled_templates_root_for_app`)
-  - Checks `app.path().resource_dir()` for:
-    - `<resourceDir>/forge/templates`
-    - `<resourceDir>/resources/forge/templates`
-  - Dev fallback (when running from `cargo tauri dev`):
-    - `src-tauri/resources/forge/templates` (derived from `env!("CARGO_MANIFEST_DIR")`)
-  - Last-ditch fallback:
-    - `src-tauri/src/shared/forge_templates_core.rs` (`find_bundled_templates_root_near_exe`)
-- Daemon: `src-tauri/src/bin/codex_monitor_daemon.rs` (`bundled_templates_root_for_daemon`)
+- App resolver: `src-tauri/src/forge/mod.rs` -> `bundled_templates_root_for_app`
+  - `app.path().resource_dir()/forge/templates`
+  - `app.path().resource_dir()/resources/forge/templates`
+  - Dev fallback: `src-tauri/resources/forge/templates` (`env!("CARGO_MANIFEST_DIR")`)
+  - Near-exe fallback: `find_bundled_templates_root_near_exe`
+- Daemon resolver: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `bundled_templates_root_for_daemon`
   - Dev fallback: `src-tauri/resources/forge/templates`
-  - Otherwise: `find_bundled_templates_root_near_exe`
+  - Near-exe fallback: `find_bundled_templates_root_near_exe`
 
-### Template Folder Structure
-
-Each bundled template is a directory under the templates root:
+### 5.2 Required Bundle Shape
 
 - `<templatesRoot>/<templateId>/template.json`
-- Additional files referenced by `template.json.files` (copied at install time)
+- Additional files listed in `template.json.files`
+- Example bundle path:
+  - `src-tauri/resources/forge/templates/ralph-loop/template.json`
 
-### `template.json` Manifest (Schema: `forge-template-v1`)
+### 5.3 `template.json` Fields (`schema = "forge-template-v1"`)
 
-`template.json` is parsed in `src-tauri/src/shared/forge_templates_core.rs` (`read_manifest`) and must have:
-
-- `schema`: must equal `"forge-template-v1"`
-- `id`: template id (must match directory name during install)
-- `title`: human-friendly name
-- `version`: template version string
-- `files`: list of relative file paths to copy from bundle into the workspace
-  - Paths are validated to be relative and to not use `..` (`validate_relative_file_path`)
+- Top-level:
+  - `schema`
+  - `id`
+  - `title`
+  - `version`
+  - `files` (relative paths only; validated by `validate_relative_file_path`)
+  - `entrypoints`
 - `entrypoints`:
-  - `phases`: relative path to phases definition
-  - `planPrompt`: relative path to the plan prompt (read by `forge_get_plan_prompt`)
-  - `executePrompt`: relative path to execute prompt (used by execution hooks)
-  - `planSchema`: relative path to the plan JSON schema shipped with the template
-  - `stateSchema`: relative path to the state JSON schema shipped with the template
-  - `requiredSkills`: list of skill names (template-defined)
-  - `hooks`:
-    - `postPlan`: node script path invoked by `forge_prepare_execution` (`forge_execute_core`)
-    - `preExecute`: node script path invoked during execution setup
-    - `postStep`: node script path invoked to regenerate prompts between steps
+  - `phases`
+  - `planPrompt`
+  - `executePrompt`
+  - `planSchema`
+  - `stateSchema`
+  - `requiredSkills`
+  - `hooks.postPlan`
+  - `hooks.preExecute`
+  - `hooks.postStep`
 
-## Plan And State File Conventions (Practical)
+## 6. Plan/State JSON Conventions (Practical Read Model)
 
-This section documents what CodexMonitor actually reads.
+### 6.1 Plan Discovery (`forge_list_plans`)
 
-### Plan Discovery (`forge_list_plans`)
+- Implemented in `src-tauri/src/shared/forge_plans_core.rs` -> `list_plans_core`.
+- Scans recursively under `<workspaceRoot>/plans/` for `.json` files (ignores dotfiles/dirs).
+- Accepts only plan JSON where:
+  - `"$schema" == "plan-v1"`
+  - No top-level `phases`
+  - No `tasks[*].phase` (legacy phase format rejected)
+  - Task IDs follow ordered naming `task-1`, `task-2`, ...
+- De-duplicates by `id`; newest `updated_at_ms` wins.
 
-Implementation: `src-tauri/src/shared/forge_plans_core.rs` (`list_plans_core`)
+### 6.2 State Resolution For Task Status
 
-- Root: `<workspaceRoot>/plans/`
-- Discovery: recursively scans for `.json` files under `plans/` (ignores dotfiles/directories)
-- A file is treated as a plan if:
-  - `"$schema"` equals `"plan-v1"`
-  - It does not have a top-level `phases` field
-  - No task object contains a `phase` field (legacy plans are skipped)
-  - Tasks must be ordered and named: `task-1`, `task-2`, ... (array order is validated)
-- Deduping: if multiple plan files share the same `id`, the most recently modified file wins
-- Sorting: plans are returned in descending `updated_at_ms` (filesystem `mtime` of the plan file)
+- Resolver function: `resolve_state_path` in `src-tauri/src/shared/forge_plans_core.rs`.
+- Candidate paths:
+  - `plans/<dir>/state.json` when plan file is `plan.json`
+  - `plans/<dir>/<stem>.state.json` when plan file is `<stem>.json`
+  - `plans/<planId>.state.json`
+  - `plans/<planId>/state.json`
+- State is joined only when parsed as `"$schema": "state-v2"`.
+- Task status source: `state.tasks[].status` matched by `id`.
+- Default status when missing/unreadable state: `"pending"`.
 
-### State Lookup For Task Statuses (`forge_list_plans`)
+## 7. Troubleshooting (Code-Grounded)
 
-Implementation: `src-tauri/src/shared/forge_plans_core.rs` (`resolve_state_path`, state parsing in `list_plans_core`)
+### 7.1 Missing Bundled Templates Root
 
-For a discovered plan, Forge attempts to find a matching state file to populate `tasks[].status`:
+- Error text: `"Unable to locate bundled forge templates"`
+- App root resolver: `src-tauri/src/forge/mod.rs` -> `bundled_templates_root_for_app`
+- Daemon root resolver: `src-tauri/src/bin/codex_monitor_daemon.rs` -> `bundled_templates_root_for_daemon`
+- Shared near-exe fallback: `src-tauri/src/shared/forge_templates_core.rs` -> `find_bundled_templates_root_near_exe`
 
-- If the plan file is `.../plan.json`, candidate is `.../state.json`
-- If the plan file is `.../<stem>.json`, candidate is `.../<stem>.state.json`
-- Additional fallback candidates:
-  - `<workspaceRoot>/plans/<planId>.state.json`
-  - `<workspaceRoot>/plans/<planId>/state.json`
+### 7.2 Missing Template Lock
 
-If the state file exists and parses with `"$schema": "state-v2"`, each plan task gets:
+- Behavior: `forge_get_installed_template` returns `null`/`None` when `.agent/template-lock.json` is absent.
+- Reader path: `src-tauri/src/shared/forge_templates_core.rs` -> `read_installed_template_lock_core`
 
-- `status`: from `state.tasks[].status` (by matching `id`)
-- Default when missing/unreadable: `"pending"`
+### 7.3 Missing Installed Template Directory
 
-### Plan Prompt Text (`forge_get_plan_prompt`)
+- Error text: `"Installed Forge template folder is missing."`
+- Raised by: `read_installed_template_plan_prompt_core` in `src-tauri/src/shared/forge_templates_core.rs`
+- Typical trigger: lock exists, but `.agent/templates/<installed_template_id>/` is missing.
 
-Implementation: `src-tauri/src/shared/forge_templates_core.rs` (`read_installed_template_plan_prompt_core`, `normalize_plan_prompt`)
+## 8. Planned Detail Sections For Follow-Up Tasks
 
-The plan prompt is read from the installed template and then normalized:
-
-- `.agent/skills/` is rewritten to `.agents/skills/`
-- `plans/<plan_id>.json` is rewritten to `plans/<plan_id>/plan.json`
-- Legacy "write the plan file now" instructions are rewritten to be plan-mode compatible
-- The prompt is prefixed with `@plan` if not already present as the first non-empty line
-
-## Troubleshooting (Grounded In Code)
-
-### Unable to locate bundled Forge templates
-
-- Symptom: error string `"Unable to locate bundled forge templates"`
-- App root resolution: `src-tauri/src/forge/mod.rs` (`bundled_templates_root_for_app`)
-- Daemon root resolution: `src-tauri/src/bin/codex_monitor_daemon.rs` (`bundled_templates_root_for_daemon`)
-- Near-exe fallback: `src-tauri/src/shared/forge_templates_core.rs` (`find_bundled_templates_root_near_exe`)
-
-### No template installed / missing `template-lock.json`
-
-- Symptom:
-  - `forge_get_installed_template` returns `null` (lock missing)
-  - `forge_get_plan_prompt` returns `"No Forge template installed."`
-- Lock file path: `<workspaceRoot>/.agent/template-lock.json`
-- Read implementation: `src-tauri/src/shared/forge_templates_core.rs` (`read_installed_template_lock_core`)
-
-### Installed template folder is missing
-
-- Symptom: `"Installed Forge template folder is missing."`
-- Expected folder: `<workspaceRoot>/.agent/templates/<installedTemplateId>/`
-- Check implementation: `src-tauri/src/shared/forge_templates_core.rs` (`read_installed_template_plan_prompt_core`)
-
+- End-to-end flow narrative:
+  - `forge_install_template` -> installed files + skill sync -> `forge_get_plan_prompt` -> normalized prompt -> plan creation -> `forge_list_plans`.
+- Prompt normalization details from `normalize_plan_prompt`:
+  - `.agent/skills/` -> `.agents/skills/`
+  - `plans/<plan_id>.json` and `plans/<plan-id>.json` -> nested `plans/<plan_id>/plan.json`
+  - Legacy file-write output instructions -> plan-mode output block
+  - Ensure first non-empty line is `@plan`

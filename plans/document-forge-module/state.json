@@ -2,20 +2,20 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "task-1 completed: created docs/forge.md outline grounded in current Forge implementation. Next: fill in backend command docs, templates/artifacts, and plan/state format details; link from README.",
+  "summary": "Task 1 complete: `docs/forge.md` now has an implementation-backed Forge outline with exact IPC command names, code paths, local/remote flow, workspace artifacts, template manifest fields, plan/state conventions, and troubleshooting anchors. Next tasks will fill full narrative details.",
   "tasks": [
     {
       "id": "task-1",
       "status": "completed",
       "attempts": 1,
-      "notes": "Added concrete docs outline in docs/forge.md with exact IPC command names and implementation file paths (app adapter, shared cores, remote proxy, daemon RPC). Captured workspace artifact layout (.agent/, .agents/skills sync, plans/) and practical plan/state conventions from src-tauri/src/shared/forge_* cores.",
-      "commit_sha": "3f373e367a3d49a7e1abe35a141a793a224c660c",
+      "notes": "Created an explicit contributor outline in `docs/forge.md` covering Forge scope, exact `forge_*` IPC commands, app/shared/daemon path mapping (`src-tauri/src/forge/mod.rs`, `src-tauri/src/shared/forge_templates_core.rs`, `src-tauri/src/shared/forge_plans_core.rs`, `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`, `src-tauri/src/bin/codex_monitor_daemon.rs`, `src/services/tauri.ts`), local vs remote proxy behavior, workspace artifacts (`.agent/`, `.agents/skills/`, `plans/`), template manifest/entrypoints, plan/state conventions, and troubleshooting cases.",
+      "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
           "status": "completed",
           "attempts": 1,
-          "notes": "docs/forge.md created as an outline grounded in src-tauri/src/forge/mod.rs, src-tauri/src/shared/forge_templates_core.rs, src-tauri/src/shared/forge_plans_core.rs, src-tauri/src/remote_backend/mod.rs, and daemon RPC wiring."
+          "notes": "Replaced `docs/forge.md` with a concrete section outline that includes exact Forge command names and implementation file paths, plus troubleshooting/error anchors from code."
         }
       ]
     },
