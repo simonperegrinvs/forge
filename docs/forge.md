@@ -217,6 +217,89 @@ How task status and current task are surfaced (`ForgeWorkspacePlanV1`):
    - Applies `normalize_plan_prompt` before returning to frontend.
 5. Remote mode uses method `forge_get_plan_prompt` with `{ workspaceId }`, then daemon executes the same core path.
 
+## Plan Prompt Normalization and Plan-Mode Compatibility
+
+`src-tauri/src/shared/forge_templates_core.rs::read_installed_template_plan_prompt_core` always returns the prompt after `normalize_plan_prompt`.
+
+Exact rewrite rules in `normalize_plan_prompt`:
+
+- Skills path rewrite:
+  - before: `.agent/skills/`
+  - after: `.agents/skills/`
+- Plan output path rewrite:
+  - before: `plans/<plan_id>.json`
+  - after: `plans/<plan_id>/plan.json`
+- Plan output path rewrite (alternate token form):
+  - before: `plans/<plan-id>.json`
+  - after: `plans/<plan-id>/plan.json`
+
+Legacy file-write output instructions are rewritten into plan collaboration-mode output requirements only when both conditions are true:
+
+- Prompt contains at least one marker:
+  - `After writing the file`
+  - `Create \`plans/<plan_id>`
+  - `Path: plans/<plan_id>`
+- Prompt contains `## Output`
+
+When that detection matches, the existing `## Output` section is replaced with a plan-mode block that requires:
+
+- `- Choose a \`plan_id\` slug matching \`^[a-z0-9][a-z0-9-]*[a-z0-9]$\` (max 64 chars).`
+- `- Output the plan as the exact \`plan-v1\` JSON object inside a single \`<proposed_plan>...</proposed_plan>\` block.`
+- `- Do NOT write any files yet.`
+- `## Hard requirement`
+- `Do NOT implement the plan. Stop after outputting the \`<proposed_plan>\` block.`
+
+`@plan` enforcement:
+
+- If the first non-empty line is not exactly `@plan`, Forge prepends `@plan\n\n`.
+- If the prompt is empty, Forge returns exactly `@plan\n`.
+
+## Plan Discovery and State Join Conventions
+
+`forge_list_plans` uses `src-tauri/src/shared/forge_plans_core.rs::list_plans_core`.
+
+Discovery scope:
+
+- Plans are discovered by recursively walking `plans/` under the workspace root.
+- Dot-prefixed entries are skipped during traversal (`.foo`, `.bar.json`, and files inside hidden directories are ignored).
+- Only `.json` files are considered.
+
+Plan schema and validation filters:
+
+- File JSON must include `"$schema": "plan-v1"`; anything else is skipped.
+- Legacy phase-based formats are rejected:
+  - Top-level `phases` key present -> skip.
+  - Any `tasks[*].phase` field present -> skip.
+- Parsed `id` must be non-empty (`ForgeWorkspacePlanV1.id` comes from plan JSON `id`, not filename/path).
+- Task ids must exactly match array order: `task-1`, `task-2`, ..., `task-n`; otherwise the plan is skipped.
+
+State file resolution (`resolve_state_path`):
+
+- For each discovered plan file, Forge probes these candidates in order and uses the first existing file:
+  1. If plan filename is `plan.json`: sibling `state.json`.
+  2. Otherwise: sibling `<plan_file_stem>.state.json`.
+  3. `plans/<planId>.state.json`.
+  4. `plans/<planId>/state.json`.
+
+Concrete examples that match this resolver:
+
+- Plan `plans/document-forge-module/plan.json` -> state candidate `plans/document-forge-module/state.json`.
+- Plan `plans/document-forge-module.json` -> state candidate `plans/document-forge-module.state.json`.
+- Plan `plans/nested/release-plan.json` -> state candidate `plans/nested/release-plan.state.json`; if missing, fallback candidates include `plans/release-plan.state.json` and `plans/release-plan/state.json` when plan id is `release-plan`.
+
+How task status and `currentTaskId` are surfaced in `ForgeWorkspacePlanV1`:
+
+- If a resolved state file parses as `"$schema": "state-v2"`, task statuses are joined by matching `state.tasks[*].id` to plan `tasks[*].id`.
+- Empty task ids or empty status values in state are ignored.
+- If no state file exists, state JSON is unreadable/unparseable, or state schema is not `state-v2`, every plan task status defaults to `"pending"`.
+- `currentTaskId` is always returned as `null` by `list_plans_core` (`current_task_id: None` in Rust).
+
+Other output shaping rules in `ForgeWorkspacePlanV1`:
+
+- `planPath` is workspace-relative when possible (for example, `plans/document-forge-module/plan.json`).
+- `updatedAtMs` is derived from the plan file mtime.
+- Duplicate plan ids are deduplicated by keeping the entry with the newest `updatedAtMs`, then sorting all plans descending by `updatedAtMs`.
+
 ## Backend Error Signals For These Commands
 
 - `"workspace not found"`: workspace id did not resolve in app or daemon `workspace_root_for_id`.

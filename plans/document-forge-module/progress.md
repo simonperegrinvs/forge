@@ -11,3 +11,4 @@
 - 2026-02-11 iter 0: A task-1-ready `docs/forge.md` should be an explicit outline only, but still include exact Forge command names and concrete implementation file paths so later tasks can fill content without re-discovery.
 - 2026-02-11 iter 0: For task-2 docs, include all current `forge_*` invokes (template, plans, and execution helpers), not just template/plan commands, so the command matrix stays aligned with `lib.rs` registration and `tauri.ts` wrappers.
 - 2026-02-11 iter 0: Forge install uses ".git/info/exclude" for `.agent/` (idempotent, no tracked .gitignore change), and `.agent/skills` -> `.agents/skills` sync is best-effort and non-overwriting.
+- 2026-02-11 iter 0: `forge_list_plans` derives plan identity from plan JSON `id` (not file path), then resolves state via ordered candidates and only imports statuses from `state-v2`; otherwise every task defaults to `pending`.
