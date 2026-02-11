@@ -3,6 +3,14 @@
 You are executing a single task from a development plan. Your context is cleared
 between tasks - everything you need is below.
 
+## Runtime contract (read first)
+
+`Forge` is the CodexMonitor backend orchestrator driving this loop.
+
+- Forge selects the current task/phase from `plans/{{plan_id}}/state.json`.
+- Forge starts fresh task-scoped threads, runs backend checks, and manages final task commits.
+- Your job is to implement the requested phase and keep `state.json`/`progress.md` accurate.
+
 ---
 
 ## Plan
@@ -60,7 +68,10 @@ between tasks - everything you need is below.
 3. Forge will run backend checks after your phase is marked complete.
    - If checks fail, fix the issues and rerun this phase.
    - If checks pass on the last phase, Forge creates the task commit and records `commit_sha`.
-4. End your message with this exact single line marker:
+4. Do NOT run `git` commands yourself in execute mode.
+   - Do NOT run `git add`, `git commit`, `git commit --amend`, or `git push`.
+   - Do NOT set `commit_sha` in `state.json`; Forge manages it.
+5. End your message with this exact single line marker:
 
 ```text
 [[cm_forge:done plan={{plan_id}} task={{current_task_id}} phase={{current_phase_id}}]]
@@ -79,6 +90,7 @@ Update `plans/{{plan_id}}/state.json` following these rules:
 4. Increment your task's `attempts` count
 5. Do NOT change any other task's status
 6. Do NOT modify `plan.json` - it is immutable
+7. Do NOT set `commit_sha`; Forge writes it after final-phase checks pass.
 
 If you learned something useful beyond this task (a gotcha, a project convention,
 a tool quirk), append a one-liner to `plans/{{plan_id}}/progress.md`:
