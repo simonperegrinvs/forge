@@ -23,17 +23,17 @@ All Forge IPC names are `forge_*`. Local mode calls shared cores in-process; rem
 
 | Invoke name | Frontend wrapper | Inputs (TS wrapper) | Output (TS wrapper) | App handler path | Local shared-core behavior | Remote JSON-RPC method + params |
 | --- | --- | --- | --- | --- | --- | --- |
-| `forge_list_bundled_templates` | `forgeListBundledTemplates` | none | `ForgeBundledTemplateInfo[]` (`id`, `title`, `version`) | `src-tauri/src/forge/mod.rs::forge_list_bundled_templates` | `bundled_templates_root_for_app` -> `forge_templates_core::list_bundled_templates_core` | method `forge_list_bundled_templates`, params `{}` |
-| `forge_get_installed_template` | `forgeGetInstalledTemplate` | `{ workspaceId }` | `ForgeTemplateLock \| null` | `src-tauri/src/forge/mod.rs::forge_get_installed_template` | `workspace_root_for_id` -> best-effort `sync_agent_skills_into_repo_agents_dir_core` -> `read_installed_template_lock_core` | method `forge_get_installed_template`, params `{ "workspaceId": "<id>" }` |
-| `forge_install_template` | `forgeInstallTemplate` | `{ workspaceId, templateId }` | `ForgeTemplateLock` | `src-tauri/src/forge/mod.rs::forge_install_template` | `bundled_templates_root_for_app` + `workspace_root_for_id` -> `install_bundled_template_core` -> best-effort `sync_agent_skills_into_repo_agents_dir_core` | method `forge_install_template`, params `{ "workspaceId": "<id>", "templateId": "<id>" }` |
-| `forge_uninstall_template` | `forgeUninstallTemplate` | `{ workspaceId }` | `void` | `src-tauri/src/forge/mod.rs::forge_uninstall_template` | `workspace_root_for_id` -> `uninstall_template_core` | method `forge_uninstall_template`, params `{ "workspaceId": "<id>" }`; daemon returns `{ "ok": true }` |
-| `forge_list_plans` | `forgeListPlans` | `{ workspaceId }` | `ForgeWorkspacePlan[]` | `src-tauri/src/forge/mod.rs::forge_list_plans` | `workspace_root_for_id` -> `forge_plans_core::list_plans_core` | method `forge_list_plans`, params `{ "workspaceId": "<id>" }` |
-| `forge_get_plan_prompt` | `forgeGetPlanPrompt` | `{ workspaceId }` | `string` | `src-tauri/src/forge/mod.rs::forge_get_plan_prompt` | `workspace_root_for_id` -> best-effort `sync_agent_skills_into_repo_agents_dir_core` -> `read_installed_template_plan_prompt_core` | method `forge_get_plan_prompt`, params `{ "workspaceId": "<id>" }` |
-| `forge_prepare_execution` | `forgePrepareExecution` | `{ workspaceId, planId }` | `void` | `src-tauri/src/forge/mod.rs::forge_prepare_execution` | `workspace_root_for_id` -> `forge_execute_core::forge_prepare_execution_core` | method `forge_prepare_execution`, params `{ "workspaceId": "<id>", "planId": "<planId>" }`; daemon returns `{ "ok": true }` |
-| `forge_reset_execution_progress` | `forgeResetExecutionProgress` | `{ workspaceId, planId }` | `void` | `src-tauri/src/forge/mod.rs::forge_reset_execution_progress` | `workspace_root_for_id` -> `forge_execute_core::forge_reset_execution_progress_core` | method `forge_reset_execution_progress`, params `{ "workspaceId": "<id>", "planId": "<planId>" }`; daemon returns `{ "ok": true }` |
-| `forge_get_next_phase_prompt` | `forgeGetNextPhasePrompt` | `{ workspaceId, planId }` | `ForgeNextPhasePrompt \| null` | `src-tauri/src/forge/mod.rs::forge_get_next_phase_prompt` | `workspace_root_for_id` -> `forge_execute_core::forge_get_next_phase_prompt_core` | method `forge_get_next_phase_prompt`, params `{ "workspaceId": "<id>", "planId": "<planId>" }` |
-| `forge_get_phase_status` | `forgeGetPhaseStatus` | `{ workspaceId, planId, taskId, phaseId }` | `ForgePhaseStatus` | `src-tauri/src/forge/mod.rs::forge_get_phase_status` | `workspace_root_for_id` -> `forge_execute_core::forge_get_phase_status_core` | method `forge_get_phase_status`, params `{ "workspaceId": "<id>", "planId": "<planId>", "taskId": "<taskId>", "phaseId": "<phaseId>" }` |
-| `forge_run_phase_checks` | `forgeRunPhaseChecks` | `{ workspaceId, planId, taskId, phaseId }` | `ForgeRunPhaseChecksResponse` | `src-tauri/src/forge/mod.rs::forge_run_phase_checks` | `workspace_root_for_id` -> `forge_execute_core::forge_run_phase_checks_core` | method `forge_run_phase_checks`, params `{ "workspaceId": "<id>", "planId": "<planId>", "taskId": "<taskId>", "phaseId": "<phaseId>" }` |
+| `forge_list_bundled_templates` | `forgeListBundledTemplates` | none | `ForgeBundledTemplateInfo[]` (`id`, `title`, `version`) | `src-tauri/src/forge/mod.rs::forge_list_bundled_templates` | `src-tauri/src/forge/mod.rs::bundled_templates_root_for_app` -> `src-tauri/src/shared/forge_templates_core.rs::list_bundled_templates_core` | method `forge_list_bundled_templates`, params `{}` |
+| `forge_get_installed_template` | `forgeGetInstalledTemplate` | `{ workspaceId }` | `ForgeTemplateLock \| null` | `src-tauri/src/forge/mod.rs::forge_get_installed_template` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_templates_core.rs::sync_agent_skills_into_repo_agents_dir_core` (best effort) -> `src-tauri/src/shared/forge_templates_core.rs::read_installed_template_lock_core` | method `forge_get_installed_template`, params `{ "workspaceId": "<id>" }` |
+| `forge_install_template` | `forgeInstallTemplate` | `{ workspaceId, templateId }` | `ForgeTemplateLock` | `src-tauri/src/forge/mod.rs::forge_install_template` | `src-tauri/src/forge/mod.rs::bundled_templates_root_for_app` + `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_templates_core.rs::install_bundled_template_core` -> `src-tauri/src/shared/forge_templates_core.rs::sync_agent_skills_into_repo_agents_dir_core` (best effort) | method `forge_install_template`, params `{ "workspaceId": "<id>", "templateId": "<id>" }` |
+| `forge_uninstall_template` | `forgeUninstallTemplate` | `{ workspaceId }` | `void` | `src-tauri/src/forge/mod.rs::forge_uninstall_template` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_templates_core.rs::uninstall_template_core` | method `forge_uninstall_template`, params `{ "workspaceId": "<id>" }`; daemon returns `{ "ok": true }` |
+| `forge_list_plans` | `forgeListPlans` | `{ workspaceId }` | `ForgeWorkspacePlan[]` | `src-tauri/src/forge/mod.rs::forge_list_plans` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_plans_core.rs::list_plans_core` | method `forge_list_plans`, params `{ "workspaceId": "<id>" }` |
+| `forge_get_plan_prompt` | `forgeGetPlanPrompt` | `{ workspaceId }` | `string` | `src-tauri/src/forge/mod.rs::forge_get_plan_prompt` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_templates_core.rs::sync_agent_skills_into_repo_agents_dir_core` (best effort) -> `src-tauri/src/shared/forge_templates_core.rs::read_installed_template_plan_prompt_core` | method `forge_get_plan_prompt`, params `{ "workspaceId": "<id>" }` |
+| `forge_prepare_execution` | `forgePrepareExecution` | `{ workspaceId, planId }` | `void` | `src-tauri/src/forge/mod.rs::forge_prepare_execution` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_execute_core.rs::forge_prepare_execution_core` | method `forge_prepare_execution`, params `{ "workspaceId": "<id>", "planId": "<planId>" }`; daemon returns `{ "ok": true }` |
+| `forge_reset_execution_progress` | `forgeResetExecutionProgress` | `{ workspaceId, planId }` | `void` | `src-tauri/src/forge/mod.rs::forge_reset_execution_progress` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_execute_core.rs::forge_reset_execution_progress_core` | method `forge_reset_execution_progress`, params `{ "workspaceId": "<id>", "planId": "<planId>" }`; daemon returns `{ "ok": true }` |
+| `forge_get_next_phase_prompt` | `forgeGetNextPhasePrompt` | `{ workspaceId, planId }` | `ForgeNextPhasePrompt \| null` | `src-tauri/src/forge/mod.rs::forge_get_next_phase_prompt` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_execute_core.rs::forge_get_next_phase_prompt_core` | method `forge_get_next_phase_prompt`, params `{ "workspaceId": "<id>", "planId": "<planId>" }` |
+| `forge_get_phase_status` | `forgeGetPhaseStatus` | `{ workspaceId, planId, taskId, phaseId }` | `ForgePhaseStatus` | `src-tauri/src/forge/mod.rs::forge_get_phase_status` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_execute_core.rs::forge_get_phase_status_core` | method `forge_get_phase_status`, params `{ "workspaceId": "<id>", "planId": "<planId>", "taskId": "<taskId>", "phaseId": "<phaseId>" }` |
+| `forge_run_phase_checks` | `forgeRunPhaseChecks` | `{ workspaceId, planId, taskId, phaseId }` | `ForgeRunPhaseChecksResponse` | `src-tauri/src/forge/mod.rs::forge_run_phase_checks` | `src-tauri/src/forge/mod.rs::workspace_root_for_id` -> `src-tauri/src/shared/forge_execute_core.rs::forge_run_phase_checks_core` | method `forge_run_phase_checks`, params `{ "workspaceId": "<id>", "planId": "<planId>", "taskId": "<taskId>", "phaseId": "<phaseId>" }` |
 
 Notes:
 - Remote param casing is camelCase at the JSON-RPC boundary (`workspaceId`, `templateId`, `planId`, `taskId`, `phaseId`).
@@ -72,6 +72,75 @@ Error implications:
 - If `current_exe()` fails before near-exe probing, the raw OS error string is returned.
 
 Daemon behavior is similar but starts at dev fallback (`CARGO_MANIFEST_DIR/resources/forge/templates`) and then near-exe probing in `src-tauri/src/bin/codex_monitor_daemon.rs::bundled_templates_root_for_daemon`.
+
+## Bundled Templates and Manifest Contract
+
+Bundled templates are stored under:
+
+- `src-tauri/resources/forge/templates/<template-id>/`
+
+Each template folder must contain `template.json` (read by `read_manifest` in `src-tauri/src/shared/forge_templates_core.rs`). `forge_list_bundled_templates` ignores folders that are missing or fail to parse `template.json`.
+
+Current bundled example:
+
+- `src-tauri/resources/forge/templates/ralph-loop/template.json`
+
+`template.json` fields (schema `forge-template-v1`):
+
+- `schema`: must be exactly `forge-template-v1`; otherwise commands that read the manifest fail with `Unsupported template.json schema...`.
+- `id`: template id. During install, this must match the folder name (`template.json id does not match template folder`).
+- `title`: display name returned by `forge_list_bundled_templates`.
+- `version`: template version returned by `forge_list_bundled_templates` and stored in template lock.
+- `files`: relative file list copied into the workspace template install directory. Every listed file must exist in the bundle.
+- `entrypoints.planPrompt`: relative prompt path used by `forge_get_plan_prompt` (`read_installed_template_plan_prompt_core`).
+- `entrypoints.executePrompt`: relative prompt path validated by execution setup (`build_execution_paths` in `forge_execute_core`).
+- `entrypoints.phases`: relative phases file path used by `forge_execute_core::load_template_phases`.
+- `entrypoints.planSchema`: template-declared plan schema path (deserialized from manifest; not currently loaded by shared cores).
+- `entrypoints.stateSchema`: template-declared state schema path (deserialized from manifest; not currently loaded by shared cores).
+- `entrypoints.requiredSkills`: template-declared skill list (deserialized from manifest; not currently enforced by shared cores).
+- `entrypoints.hooks.postPlan`: hook script run by `forge_prepare_execution`/`forge_reset_execution_progress` when (re)generating execution artifacts.
+- `entrypoints.hooks.preExecute`: hook script run by `forge_prepare_execution`/`forge_reset_execution_progress` before execution.
+- `entrypoints.hooks.postStep`: hook script run by `forge_get_next_phase_prompt` and `forge_run_phase_checks` to regenerate `plans/<plan_id>/execute-prompt.md`.
+
+`template.json` should also be included in `files` so installed templates at `.agent/templates/<id>/` remain self-describing (the bundled `ralph-loop` template does this).
+
+## Workspace Artifacts Created by Install
+
+`install_bundled_template_core` writes these paths in the workspace root:
+
+- `.agent/templates/<template-id>/<file>` for every relative path in manifest `files`.
+- `.agent/template-lock.json` with schema `forge-template-lock-v1`:
+  - `schema`
+  - `installedTemplateId`
+  - `installedTemplateVersion`
+  - `installedAtIso`
+  - `installedFiles` (copied from manifest `files`)
+- `.agent/skills/<...>` for any file in `files` under `skills/` (mirrored from template bundle).
+- `.git/info/exclude` entry `.agent/` (idempotent best-effort), so Forge-managed workspace artifacts stay out of git status without editing tracked `.gitignore`.
+
+Skill discovery bridge (`.agent` -> `.agents`):
+
+- Forge templates install skills into `.agent/skills/*`.
+- Codex repository skill discovery uses `.agents/skills/*`.
+- `sync_agent_skills_into_repo_agents_dir_core` copies `.agent/skills/*` into `.agents/skills/*` on:
+  - `forge_get_installed_template`
+  - `forge_install_template`
+  - `forge_get_plan_prompt`
+- Existing files in `.agents/skills/*` are never overwritten (`if dest_path.exists() { continue; }`).
+- Sync is best-effort in app handlers: failures are logged to stderr and do not fail the command.
+
+## Workspace Artifacts Removed by Uninstall
+
+`uninstall_template_core` removes only:
+
+- `.agent/templates/<installed_template_id>/` (resolved from `.agent/template-lock.json` when lock is readable)
+- `.agent/template-lock.json`
+
+It intentionally does not remove:
+
+- `.agent/skills/*`
+- `.agents/skills/*`
+- `.git/info/exclude` entries (including `.agent/`)
 
 ## Flow: Template Install
 

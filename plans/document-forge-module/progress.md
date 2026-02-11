@@ -9,3 +9,4 @@
 - 2026-02-11 iter 0: Legacy plan prompts are only rewritten into plan-mode output requirements when `## Output` exists and one of these markers is present: `After writing the file`, `Create \`plans/<plan_id>`, or `Path: plans/<plan_id>`.
 - 2026-02-11 iter 0: README discoverability is best handled with a dedicated `## Forge` section that links once to `docs/forge.md` and leaves implementation details in the canonical doc.
 - 2026-02-11 iter 0: A task-1-ready `docs/forge.md` should be an explicit outline only, but still include exact Forge command names and concrete implementation file paths so later tasks can fill content without re-discovery.
+- 2026-02-11 iter 0: For task-2 docs, include all current `forge_*` invokes (template, plans, and execution helpers), not just template/plan commands, so the command matrix stays aligned with `lib.rs` registration and `tauri.ts` wrappers.

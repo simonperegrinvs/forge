@@ -2,11 +2,11 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "Task 2 completed: docs/forge.md now documents all forge_* command flows with TS wrappers, Rust handlers, shared-core mapping, remote JSON-RPC param casing, and bundled template root resolution/errors. Next: template/artifact documentation.",
+  "summary": "Task 3 implemented: docs/forge.md now documents bundled template manifest fields plus install/uninstall workspace artifacts (.agent/templates, forge-template-lock-v1, .agent/.agents skill bridge, git exclude rationale). Next: plan/state file conventions.",
   "tasks": [
     {
       "id": "task-1",
-      "status": "completed",
+      "status": "in_progress",
       "attempts": 1,
       "notes": "Created docs/forge.md as an explicit section-by-section outline grounded in live code paths. Included exact IPC names (forge_list_bundled_templates, forge_get_installed_template, forge_install_template, forge_uninstall_template, forge_list_plans, forge_get_plan_prompt) and implementation paths across src-tauri/src/lib.rs, src-tauri/src/forge/mod.rs, src-tauri/src/remote_backend/mod.rs, src-tauri/src/bin/codex_monitor_daemon/rpc.rs, src-tauri/src/bin/codex_monitor_daemon.rs, src-tauri/src/shared/forge_templates_core.rs, and src-tauri/src/shared/forge_plans_core.rs. Captured required outline sections for workspace artifacts, template manifest entrypoints, plan/state conventions, prompt normalization, and troubleshooting error cases.",
       "commit_sha": "83f4ddf9e52524cc4de652988a814f19f9d675dc",
@@ -21,10 +21,10 @@
     },
     {
       "id": "task-2",
-      "status": "in_progress",
+      "status": "completed",
       "attempts": 1,
       "notes": "Expanded docs/forge.md from outline to canonical backend command documentation. Added a Forge command matrix covering every current forge_* invoke with frontend wrapper function, app handler path, local shared-core function path, and remote JSON-RPC method/param shape using exact camelCase keys (workspaceId/templateId/planId/taskId/phaseId). Added local-vs-remote routing narrative (invoke -> app handler -> remote_backend::call_remote -> daemon rpc.rs -> daemon state method -> shared core), explicit notes about retry allowlist coverage, bundled_templates_root_for_app resolution order (resource_dir forge/templates, resource_dir resources/forge/templates, CARGO_MANIFEST_DIR dev fallback, near-exe fallback), and error implications. Added short end-to-end narratives for template install and plan prompt retrieval for plan creation.",
-      "commit_sha": null,
+      "commit_sha": "f44c9365dfdd47faa4b3e51537463a10b0d724ce",
       "phases": [
         {
           "id": "implementation",
@@ -36,16 +36,16 @@
     },
     {
       "id": "task-3",
-      "status": "pending",
-      "attempts": 0,
-      "notes": "",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Expanded docs/forge.md with a template-centric section grounded in src-tauri/src/shared/forge_templates_core.rs and forge_execute_core.rs. Documented bundled layout src-tauri/resources/forge/templates/<template-id>/, required template.json, manifest field semantics (schema/id/title/version/files/entrypoints with planPrompt, executePrompt, phases, planSchema, stateSchema, requiredSkills, hooks). Documented install artifacts under .agent/templates/<template-id>/..., .agent/template-lock.json with schema forge-template-lock-v1, skill mirroring to .agent/skills from files entries under skills/, best-effort sync into .agents/skills with explicit non-overwrite behavior, and .git/info/exclude .agent/ rationale. Documented uninstall scope as only .agent/templates/<installed_template_id>/ and .agent/template-lock.json.",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending",
-          "attempts": 0,
-          "notes": ""
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Updated docs/forge.md to cover bundled template manifest contract and installed/uninstalled workspace artifacts, including forge-template-lock-v1, .agent/.agents skill bridge, non-overwrite sync, and .git/info/exclude behavior."
         }
       ]
     },
