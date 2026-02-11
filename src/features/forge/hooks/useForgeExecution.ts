@@ -65,8 +65,6 @@ type ForgeExecutionState = {
 };
 
 const POLL_INTERVAL_MS = 1200;
-const PHASE_COMPLETION_TIMEOUT_MS = 90_000;
-const MAX_PHASE_REPROMPTS = 2;
 
 function isFinalPhaseStatus(status: ForgeExecutionStatusLike): boolean {
   const normalized = status.trim().toLowerCase();
@@ -226,13 +224,11 @@ export function useForgeExecution({
       setLastError(null);
 
       const isActive = () => activeRunRef.current === token && runTokenRef.current === token;
-      const phaseRepromptAttempts = new Map<string, number>();
 
       const waitForPhaseFinalStatus = async (
         taskId: string,
         phaseId: string,
       ): Promise<ForgeExecutionStatusLike | null> => {
-        const startedAtMs = Date.now();
         while (isActive()) {
           const phaseStatus = await getPhaseStatus(
             workspace,
@@ -245,9 +241,6 @@ export function useForgeExecution({
           }
           if (isFinalPhaseStatus(phaseStatus.status)) {
             return phaseStatus.status;
-          }
-          if (Date.now() - startedAtMs >= PHASE_COMPLETION_TIMEOUT_MS) {
-            return null;
           }
           await wait(POLL_INTERVAL_MS);
         }
@@ -285,7 +278,6 @@ export function useForgeExecution({
           if (!phaseId) {
             throw new Error("Forge next phase prompt returned an empty phase id.");
           }
-          const phaseAttemptKey = `${taskId}:${phaseId}`;
 
           const mappedThreadId = threadByTaskId.get(taskId) ?? null;
           if (!mappedThreadId) {
@@ -362,22 +354,14 @@ export function useForgeExecution({
           activeTurnRef.current = null;
 
           if (lastPhaseStatus === null) {
-            const attempts = (phaseRepromptAttempts.get(phaseAttemptKey) ?? 0) + 1;
-            if (attempts > MAX_PHASE_REPROMPTS) {
-              throw new Error(
-                `Phase ${phase.taskId}/${phase.phaseId} did not reach a final status after ${MAX_PHASE_REPROMPTS + 1} prompt attempts. Regenerate progress in plans/${normalizedPlanId}/state.json and retry.`,
-              );
-            }
-            phaseRepromptAttempts.set(phaseAttemptKey, attempts);
-            await wait(POLL_INTERVAL_MS);
-            continue;
+            return;
           }
 
-          if (!isCompletedPhaseStatus(lastPhaseStatus ?? "")) {
-            await wait(POLL_INTERVAL_MS);
-            continue;
+          if (!isCompletedPhaseStatus(lastPhaseStatus)) {
+            throw new Error(
+              `Phase ${taskId}/${phaseId} reached terminal status "${lastPhaseStatus}" before completion.`,
+            );
           }
-          phaseRepromptAttempts.delete(phaseAttemptKey);
 
           const checks = await runPhaseChecks(
             workspace,
