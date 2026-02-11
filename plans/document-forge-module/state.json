@@ -2,7 +2,7 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "Tasks 1-4 docs are implemented (commands, templates/artifacts, and plan/state conventions). Next: task-5 prompt normalization and plan-mode compatibility.",
+  "summary": "Tasks 1-5 docs are implemented, including exact prompt-normalization and plan-mode compatibility rules. Next: task-6 README discoverability link.",
   "tasks": [
     {
       "id": "task-1",
@@ -51,10 +51,10 @@
     },
     {
       "id": "task-4",
-      "status": "in_progress",
+      "status": "completed",
       "attempts": 1,
       "notes": "Added a new `forge_list_plans` documentation section in docs/forge.md covering plan-v1 discovery/filtering, state resolver candidate order (`state.json`, `<stem>.state.json`, `plans/<planId>.state.json`, `plans/<planId>/state.json`), concrete path examples, status join/default `pending`, and `currentTaskId` being `null` in current core output.",
-      "commit_sha": null,
+      "commit_sha": "6d4834e313d3fe96a5ed7c6662529637aba8ee18",
       "phases": [
         {
           "id": "implementation",
@@ -66,16 +66,16 @@
     },
     {
       "id": "task-5",
-      "status": "pending",
-      "attempts": 0,
-      "notes": "",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Updated docs/forge.md to document `normalize_plan_prompt` with exact literal before/after rewrites: `.agent/skills/` to `.agents/skills/`, `plans/<plan_id>.json`/`plans/<plan-id>.json` to nested `plan.json` paths, legacy `## Output` file-write prompt rewrite into `<proposed_plan>` plan-mode instructions, and `@plan` prefix enforcement.",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending",
-          "attempts": 0,
-          "notes": ""
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Added prompt-normalization bullets in docs/forge.md with exact strings from `src-tauri/src/shared/forge_templates_core.rs::normalize_plan_prompt`, including legacy plan-collaboration rewrite triggers and required replacement lines."
         }
       ]
     },

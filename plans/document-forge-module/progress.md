@@ -5,3 +5,4 @@
 - 2026-02-11 iter 0: `forge_plans_core::list_plans_core` always returns `currentTaskId: null`; task statuses come only from matching `state-v2` task IDs (otherwise `pending`).
 - 2026-02-11 iter 0: Forge remote RPC for void-style commands (`forge_uninstall_template`, `forge_prepare_execution`, `forge_reset_execution_progress`) returns `{ "ok": true }` from daemon `rpc.rs`, while app-side TS wrappers expose `Promise<void>`.
 - 2026-02-11 iter 0: `uninstall_template_core` removes only `.agent/templates/<installed_template_id>/` and `.agent/template-lock.json`; `.agent/skills`, `.agents/skills`, and `.git/info/exclude` entries are left intact.
+- 2026-02-11 iter 0: Plan listing ignores dot-prefixed entries under `plans/` and deduplicates duplicate plan IDs by keeping the newest `updatedAtMs`.

@@ -172,10 +172,20 @@ Uninstall does not remove:
    - Requires `.agent/templates/<installed_template_id>/`; errors `"Installed Forge template folder is missing."` when absent.
    - Reads `template.json` and `entrypoints.planPrompt`.
    - Reads prompt file and returns `normalize_plan_prompt` output.
-5. Prompt normalization enforces current conventions:
+5. Prompt normalization (`normalize_plan_prompt`) enforces current conventions using exact string rewrites:
    - `.agent/skills/` -> `.agents/skills/`
-   - `plans/<plan_id>.json` and `plans/<plan-id>.json` -> nested `plans/<plan_id>/plan.json`
-   - Prepends `@plan` when missing
+   - `plans/<plan_id>.json` -> `plans/<plan_id>/plan.json`
+   - `plans/<plan-id>.json` -> `plans/<plan-id>/plan.json`
+   - Legacy plan prompts that contain `## Output` and any of:
+     - `After writing the file`
+     - `Create \`plans/<plan_id>`
+     - `Path: plans/<plan_id>`
+     are rewritten from file-write instructions to plan-mode instructions, including exact lines:
+     - `- Output the plan as the exact \`plan-v1\` JSON object inside a single \`<proposed_plan>...</proposed_plan>\` block.`
+     - `- Do NOT write any files yet.`
+     - `Do NOT implement the plan. Stop after outputting the \`<proposed_plan>\` block.`
+   - First non-empty line not equal to `@plan` -> prepend `@plan\n\n`.
+   - Empty prompt -> `@plan\n`.
 6. Remote mode sends method `"forge_get_plan_prompt"` with `{ "workspaceId" }`; daemon runs the same core path and returns the normalized prompt string.
 
 ## Plan Discovery and State Join (`forge_list_plans`)
