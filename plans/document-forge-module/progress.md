@@ -1,1 +1,2 @@
 - 2026-02-11 iter 0: Bundled Forge templates live under `src-tauri/resources/forge/templates` (dev fallback via `env!(\"CARGO_MANIFEST_DIR\")`).
+- 2026-02-11 iter 0: `forge_plans_core::resolve_state_path` checks four state filename patterns and only applies task statuses when `"$schema"` is `state-v2`; otherwise statuses default to `pending`.

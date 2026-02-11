@@ -22,6 +22,8 @@ For general app architecture, use `AGENTS.md`.
 
 Document each command with app handler, shared core, frontend wrapper, remote proxy method, and daemon RPC branch.
 
+Registration anchor: `src-tauri/src/lib.rs` inside `tauri::generate_handler![...]`.
+
 ### 2.1 `forge_list_bundled_templates`
 
 - App command: `src-tauri/src/forge/mod.rs` -> `forge_list_bundled_templates`
