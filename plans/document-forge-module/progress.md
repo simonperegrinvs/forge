@@ -8,3 +8,4 @@
 - 2026-02-11 iter 0: Plan listing ignores dot-prefixed entries under `plans/` and deduplicates duplicate plan IDs by keeping the newest `updatedAtMs`.
 - 2026-02-11 iter 0: Legacy plan prompts are only rewritten into plan-mode output requirements when `## Output` exists and one of these markers is present: `After writing the file`, `Create \`plans/<plan_id>`, or `Path: plans/<plan_id>`.
 - 2026-02-11 iter 0: README discoverability is best handled with a dedicated `## Forge` section that links once to `docs/forge.md` and leaves implementation details in the canonical doc.
+- 2026-02-11 iter 0: A task-1-ready `docs/forge.md` should be an explicit outline only, but still include exact Forge command names and concrete implementation file paths so later tasks can fill content without re-discovery.

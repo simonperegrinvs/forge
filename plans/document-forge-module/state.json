@@ -2,14 +2,14 @@
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
   "iteration": 0,
-  "summary": "Task 1 completed: docs/forge.md now defines the canonical Forge doc outline with IPC mapping, local/remote routing, workspace artifacts, template manifest contract, plan/state conventions, and troubleshooting. Next: fill each outlined section with full content.",
+  "summary": "Task 2 completed: docs/forge.md now documents all forge_* command flows with TS wrappers, Rust handlers, shared-core mapping, remote JSON-RPC param casing, and bundled template root resolution/errors. Next: template/artifact documentation.",
   "tasks": [
     {
       "id": "task-1",
-      "status": "in_progress",
+      "status": "completed",
       "attempts": 1,
       "notes": "Created docs/forge.md as an explicit section-by-section outline grounded in live code paths. Included exact IPC names (forge_list_bundled_templates, forge_get_installed_template, forge_install_template, forge_uninstall_template, forge_list_plans, forge_get_plan_prompt) and implementation paths across src-tauri/src/lib.rs, src-tauri/src/forge/mod.rs, src-tauri/src/remote_backend/mod.rs, src-tauri/src/bin/codex_monitor_daemon/rpc.rs, src-tauri/src/bin/codex_monitor_daemon.rs, src-tauri/src/shared/forge_templates_core.rs, and src-tauri/src/shared/forge_plans_core.rs. Captured required outline sections for workspace artifacts, template manifest entrypoints, plan/state conventions, prompt normalization, and troubleshooting error cases.",
-      "commit_sha": null,
+      "commit_sha": "83f4ddf9e52524cc4de652988a814f19f9d675dc",
       "phases": [
         {
           "id": "implementation",
@@ -21,16 +21,16 @@
     },
     {
       "id": "task-2",
-      "status": "pending",
-      "attempts": 0,
-      "notes": "",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Expanded docs/forge.md from outline to canonical backend command documentation. Added a Forge command matrix covering every current forge_* invoke with frontend wrapper function, app handler path, local shared-core function path, and remote JSON-RPC method/param shape using exact camelCase keys (workspaceId/templateId/planId/taskId/phaseId). Added local-vs-remote routing narrative (invoke -> app handler -> remote_backend::call_remote -> daemon rpc.rs -> daemon state method -> shared core), explicit notes about retry allowlist coverage, bundled_templates_root_for_app resolution order (resource_dir forge/templates, resource_dir resources/forge/templates, CARGO_MANIFEST_DIR dev fallback, near-exe fallback), and error implications. Added short end-to-end narratives for template install and plan prompt retrieval for plan creation.",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending",
-          "attempts": 0,
-          "notes": ""
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Documented backend Forge command flow in docs/forge.md with per-command input/output contracts, local shared-core mapping, remote JSON-RPC param shapes, TS wrapper references, plus install/prompt flow narratives and bundled template root resolution/error behavior."
         }
       ]
     },
