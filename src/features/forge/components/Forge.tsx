@@ -100,6 +100,7 @@ const defaultForgePlansClient: ForgePlansClient = {
 type ForgeItemStatus = "pending" | "inProgress" | "completed";
 
 type ForgePlanItem = {
+  id: string;
   title: string;
   status: ForgeItemStatus;
 };
@@ -434,6 +435,7 @@ export function Forge({
       const items: ForgePlanItem[] = plan.tasks.map((task) => {
         const status = mapForgeItemStatus(task.status);
         return {
+          id: task.id,
           title: task.name,
           status,
         };
@@ -715,11 +717,16 @@ export function Forge({
           {selectedPlan ? (
             <ol className="forge-items">
               {selectedPlan.items.map((item, index) => {
-                const isCompleted = item.status === "completed";
-                const isRunning = item.status === "inProgress";
+                const isActiveTask = runningInfo?.taskId === item.id;
+                const effectiveStatus: ForgeItemStatus = isActiveTask
+                  ? "inProgress"
+                  : item.status;
+                const isCompleted = effectiveStatus === "completed";
+                const isRunning = effectiveStatus === "inProgress";
+                const isActivePhase = isActiveTask && runningInfo?.phaseId;
 
                 return (
-                  <li key={`${item.title}-${index}`} className={`forge-item ${item.status}`}>
+                  <li key={`${item.id}-${item.title}-${index}`} className={`forge-item ${effectiveStatus}`}>
                     <div className="forge-item-row">
                       <span className="forge-item-icon" aria-hidden>
                         {isCompleted ? (
@@ -731,6 +738,11 @@ export function Forge({
                         )}
                       </span>
                       <span className="forge-item-title">{item.title}</span>
+                      {isActivePhase ? (
+                        <span className="forge-item-meta">
+                          Phase {runningInfo.phaseId} in progress
+                        </span>
+                      ) : null}
                     </div>
                   </li>
                 );

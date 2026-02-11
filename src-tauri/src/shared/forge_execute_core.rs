@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
+use std::process::Output;
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
@@ -10,10 +11,11 @@ use uuid::Uuid;
 
 use crate::shared::forge_templates_core::{read_installed_template_lock_core, ForgeTemplateLockV1};
 use crate::shared::process_core::tokio_command;
-use crate::utils::git_env_path;
+use crate::utils::{git_env_path, resolve_git_binary};
 
 const CHECK_TIMEOUT_SECONDS_DEFAULT: u64 = 10 * 60;
 const HOOK_TIMEOUT_SECONDS: u64 = 2 * 60;
+const GIT_COMMAND_TIMEOUT_SECONDS: u64 = 90;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,13 +90,12 @@ struct PlanV1 {
 #[derive(Debug, Clone, Deserialize)]
 struct PlanTaskV1 {
     id: String,
-    #[allow(dead_code)]
     name: String,
     #[serde(default)]
     depends_on: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct StateV2 {
     #[serde(rename = "$schema")]
     schema: String,
@@ -103,7 +104,7 @@ struct StateV2 {
     tasks: Vec<StateTaskV2>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct StateTaskV2 {
     id: String,
     status: String,
@@ -113,7 +114,7 @@ struct StateTaskV2 {
     phases: Vec<StatePhaseV2>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct StatePhaseV2 {
     id: String,
     status: String,
@@ -635,6 +636,151 @@ async fn run_phase_check(workspace_root: &Path, check: &RunnablePhaseCheck) -> F
     }
 }
 
+fn task_has_commit_sha(task: &StateTaskV2) -> bool {
+    task.commit_sha
+        .as_ref()
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn build_forge_task_commit_message(plan_id: &str, task: &PlanTaskV1) -> String {
+    let normalized_name = task.name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized_name.is_empty() {
+        return format!("forge({plan_id}): {}", task.id);
+    }
+    format!("forge({plan_id}): {} {normalized_name}", task.id)
+}
+
+async fn run_git_command_with_timeout(
+    workspace_root: &Path,
+    args: &[&str],
+) -> Result<Output, String> {
+    let git_bin = resolve_git_binary().map_err(|err| format!("Failed to resolve git binary: {err}"))?;
+    let mut command = tokio_command(git_bin);
+    command
+        .args(args)
+        .current_dir(workspace_root)
+        .env("PATH", git_env_path());
+
+    match timeout(Duration::from_secs(GIT_COMMAND_TIMEOUT_SECONDS), command.output()).await {
+        Ok(Ok(output)) => Ok(output),
+        Ok(Err(err)) => Err(format!("Failed to run git command {:?}: {err}", args)),
+        Err(_) => Err(format!(
+            "Git command timed out after {}s: {:?}",
+            GIT_COMMAND_TIMEOUT_SECONDS, args
+        )),
+    }
+}
+
+async fn forge_create_task_commit(
+    workspace_root: &Path,
+    commit_message: &str,
+) -> Result<(String, String, String, i64), ForgePhaseCheckResultV1> {
+    let start = Instant::now();
+    let add_output = match run_git_command_with_timeout(workspace_root, &["add", "-A"]).await {
+        Ok(output) => output,
+        Err(err) => {
+            return Err(ForgePhaseCheckResultV1 {
+                id: "forge-commit".to_string(),
+                title: "Forge task commit".to_string(),
+                exit_code: -1,
+                duration_ms: start.elapsed().as_millis() as i64,
+                stdout: String::new(),
+                stderr: err,
+                timed_out: false,
+            })
+        }
+    };
+    if !add_output.status.success() {
+        return Err(ForgePhaseCheckResultV1 {
+            id: "forge-commit".to_string(),
+            title: "Forge task commit".to_string(),
+            exit_code: add_output.status.code().unwrap_or(-1),
+            duration_ms: start.elapsed().as_millis() as i64,
+            stdout: String::from_utf8_lossy(&add_output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&add_output.stderr).to_string(),
+            timed_out: false,
+        });
+    }
+
+    let commit_output = match run_git_command_with_timeout(
+        workspace_root,
+        &["commit", "-m", commit_message],
+    )
+    .await
+    {
+        Ok(output) => output,
+        Err(err) => {
+            return Err(ForgePhaseCheckResultV1 {
+                id: "forge-commit".to_string(),
+                title: "Forge task commit".to_string(),
+                exit_code: -1,
+                duration_ms: start.elapsed().as_millis() as i64,
+                stdout: String::new(),
+                stderr: err,
+                timed_out: false,
+            })
+        }
+    };
+    if !commit_output.status.success() {
+        return Err(ForgePhaseCheckResultV1 {
+            id: "forge-commit".to_string(),
+            title: "Forge task commit".to_string(),
+            exit_code: commit_output.status.code().unwrap_or(-1),
+            duration_ms: start.elapsed().as_millis() as i64,
+            stdout: String::from_utf8_lossy(&commit_output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&commit_output.stderr).to_string(),
+            timed_out: false,
+        });
+    }
+
+    let sha_output = match run_git_command_with_timeout(workspace_root, &["rev-parse", "HEAD"]).await {
+        Ok(output) => output,
+        Err(err) => {
+            return Err(ForgePhaseCheckResultV1 {
+                id: "forge-commit".to_string(),
+                title: "Forge task commit".to_string(),
+                exit_code: -1,
+                duration_ms: start.elapsed().as_millis() as i64,
+                stdout: String::new(),
+                stderr: err,
+                timed_out: false,
+            })
+        }
+    };
+    if !sha_output.status.success() {
+        return Err(ForgePhaseCheckResultV1 {
+            id: "forge-commit".to_string(),
+            title: "Forge task commit".to_string(),
+            exit_code: sha_output.status.code().unwrap_or(-1),
+            duration_ms: start.elapsed().as_millis() as i64,
+            stdout: String::from_utf8_lossy(&sha_output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&sha_output.stderr).to_string(),
+            timed_out: false,
+        });
+    }
+
+    let sha = String::from_utf8_lossy(&sha_output.stdout).trim().to_string();
+    if sha.is_empty() {
+        return Err(ForgePhaseCheckResultV1 {
+            id: "forge-commit".to_string(),
+            title: "Forge task commit".to_string(),
+            exit_code: -1,
+            duration_ms: start.elapsed().as_millis() as i64,
+            stdout: String::new(),
+            stderr: "Unable to resolve commit SHA after commit.".to_string(),
+            timed_out: false,
+        });
+    }
+
+    Ok((
+        sha,
+        String::from_utf8_lossy(&commit_output.stdout).to_string(),
+        String::from_utf8_lossy(&commit_output.stderr).to_string(),
+        start.elapsed().as_millis() as i64,
+    ))
+}
+
 pub(crate) async fn forge_prepare_execution_core(
     workspace_root: &Path,
     plan_id: &str,
@@ -745,14 +891,45 @@ pub(crate) fn forge_get_phase_status_core(
 pub(crate) async fn forge_run_phase_checks_core(
     workspace_root: &Path,
     plan_id: &str,
-    _task_id: &str,
+    task_id: &str,
     phase_id: &str,
 ) -> Result<ForgeRunPhaseChecksResponseV1, String> {
     let paths = build_execution_paths(workspace_root, plan_id)?;
+    let task_id = task_id.trim();
     let phase_id = phase_id.trim();
+    if task_id.is_empty() {
+        return Err("taskId is required".to_string());
+    }
     if phase_id.is_empty() {
         return Err("phaseId is required".to_string());
     }
+
+    let plan = load_plan(&paths)?;
+    let plan_task = plan
+        .tasks
+        .iter()
+        .find(|task| task.id.trim() == task_id)
+        .ok_or_else(|| format!("Unknown taskId: {task_id}"))?;
+    let mut state = load_state(&paths)?;
+    let task_index = state
+        .tasks
+        .iter()
+        .position(|task| task.id.trim() == task_id)
+        .ok_or_else(|| format!("state.json missing task entry for {task_id}"))?;
+    let task_state = state
+        .tasks
+        .get(task_index)
+        .ok_or_else(|| format!("state.json missing task entry for {task_id}"))?;
+    let phase_index = task_state
+        .phases
+        .iter()
+        .position(|phase| phase.id.trim() == phase_id)
+        .ok_or_else(|| format!("Unknown phaseId for task {task_id}: {phase_id}"))?;
+    let target_phase = task_state
+        .phases
+        .get(phase_index)
+        .ok_or_else(|| format!("Unknown phaseId for task {task_id}: {phase_id}"))?;
+    let is_last_phase = phase_index + 1 >= task_state.phases.len();
 
     let phases = load_template_phases(&paths)?;
     let phase_checks = phases
@@ -773,9 +950,50 @@ pub(crate) async fn forge_run_phase_checks_core(
         }
     }
 
-    let ok = results
+    let mut ok = results
         .iter()
         .all(|result| !result.timed_out && result.exit_code == 0);
+
+    let should_commit_task = ok
+        && is_last_phase
+        && is_completed_status(&target_phase.status)
+        && is_task_completed(task_state)
+        && !task_has_commit_sha(task_state);
+    if should_commit_task {
+        let commit_message = build_forge_task_commit_message(&paths.plan_id, plan_task);
+        match forge_create_task_commit(&paths.workspace_root, &commit_message).await {
+            Ok((sha, stdout, stderr, duration_ms)) => {
+                if let Some(task) = state.tasks.get_mut(task_index) {
+                    task.commit_sha = Some(sha.clone());
+                }
+                let state_raw =
+                    serde_json::to_string_pretty(&state).map_err(|err| err.to_string())?;
+                fs::write(&paths.state_path, format!("{state_raw}\n")).map_err(|err| err.to_string())?;
+                results.push(ForgePhaseCheckResultV1 {
+                    id: "forge-commit".to_string(),
+                    title: "Forge task commit".to_string(),
+                    exit_code: 0,
+                    duration_ms,
+                    stdout: if stdout.trim().is_empty() {
+                        format!("Created commit {sha}")
+                    } else {
+                        stdout
+                    },
+                    stderr,
+                    timed_out: false,
+                });
+            }
+            Err(result) => {
+                results.push(result);
+                ok = false;
+            }
+        }
+    }
+
+    ok = ok
+        && results
+            .iter()
+            .all(|result| !result.timed_out && result.exit_code == 0);
 
     let context = build_hook_context(&paths);
     run_template_hook(&paths.post_step_hook_path, &paths.workspace_root, &context).await?;

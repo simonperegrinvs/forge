@@ -244,6 +244,12 @@
   color: var(--text-strong);
 }
 
+.forge-item-meta {
+  font-size: 11px;
+  color: var(--text-accent);
+  margin-left: auto;
+}
+
 @keyframes forge-spin {
   to {
     transform: rotate(360deg);

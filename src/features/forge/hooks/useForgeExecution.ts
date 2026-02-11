@@ -159,17 +159,8 @@ export function useForgeExecution({
           return;
         }
 
-        const threadResponse = await startThread(workspace);
-        if (!isActive()) {
-          return;
-        }
-
-        const threadId = extractThreadId(threadResponse);
-        if (!threadId) {
-          throw new Error("Forge execution start thread response missing thread id.");
-        }
-
-        onSelectThread?.(workspace, threadId);
+        let activeThreadId: string | null = null;
+        let activeThreadTaskId: string | null = null;
         const completedPhases = new Set<string>();
 
         while (isActive()) {
@@ -187,8 +178,28 @@ export function useForgeExecution({
             continue;
           }
 
+          if (!activeThreadId || activeThreadTaskId !== phase.taskId) {
+            const threadResponse = await startThread(workspace);
+            if (!isActive()) {
+              return;
+            }
+
+            const threadId = extractThreadId(threadResponse);
+            if (!threadId) {
+              throw new Error("Forge execution start thread response missing thread id.");
+            }
+
+            activeThreadId = threadId;
+            activeThreadTaskId = phase.taskId;
+            onSelectThread?.(workspace, threadId);
+          }
+
           setRunningInfo({ taskId: phase.taskId, phaseId: phase.phaseId });
 
+          const threadId = activeThreadId;
+          if (!threadId) {
+            throw new Error("Forge execution thread id is missing.");
+          }
           await sendUserMessage(workspace, threadId, phase.promptText, { collaborationMode });
           if (!isActive()) {
             return;
@@ -214,7 +225,16 @@ export function useForgeExecution({
             return;
           }
 
-          await runPhaseChecks(workspace, normalizedPlanId, phase.taskId, phase.phaseId);
+          const checks = await runPhaseChecks(
+            workspace,
+            normalizedPlanId,
+            phase.taskId,
+            phase.phaseId,
+          );
+          if (!checks.ok) {
+            await wait(POLL_INTERVAL_MS);
+            continue;
+          }
           completedPhases.add(phaseKey);
         }
       } catch (error) {

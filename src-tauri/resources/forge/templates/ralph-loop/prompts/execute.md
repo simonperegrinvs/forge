@@ -52,15 +52,14 @@ between tasks - everything you need is below.
 ## Phase protocol (important)
 
 1. Implement the current phase for the current task.
-2. If this is the last phase of the task:
-   - Create exactly 1 git commit for the task before marking the phase complete.
-   - Record the commit SHA in `plans/{{plan_id}}/state.json` under your task's `commit_sha`.
-   - If checks fail after committing, fix issues and **amend the same commit** (do not create a second commit).
-3. Update `plans/{{plan_id}}/state.json`:
+2. Update `plans/{{plan_id}}/state.json`:
    - Set this phase `status` to `completed` (or `blocked`/`failed` if truly stuck).
    - Increment this phase `attempts`.
    - Append concise notes (paths/decisions).
    - Keep task `status` consistent with phase statuses.
+3. Forge will run backend checks after your phase is marked complete.
+   - If checks fail, fix the issues and rerun this phase.
+   - If checks pass on the last phase, Forge creates the task commit and records `commit_sha`.
 4. End your message with this exact single line marker:
 
 ```text

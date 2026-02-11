@@ -205,4 +205,142 @@ describe("Forge plans", () => {
       ),
     );
   });
+
+  it("starts a new thread for each task transition during execution", async () => {
+    const startThread = vi
+      .fn<ForgePlansClient["startThread"]>()
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-1" } } })
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-2" } } });
+    const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
+    const getNextPhasePrompt = vi
+      .fn<ForgePlansClient["getNextPhasePrompt"]>()
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 1 prompt",
+      })
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-2",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 2 prompt",
+      })
+      .mockResolvedValueOnce(null);
+    const onSelectThread = vi.fn();
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [
+            { id: "task-1", name: "Task 1", status: "pending" },
+            { id: "task-2", name: "Task 2", status: "pending" },
+          ],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      getNextPhasePrompt,
+      getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      connectWorkspace: async () => {},
+      startThread,
+      sendUserMessage,
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        onSelectThread={onSelectThread}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run plan" }));
+
+    await waitFor(() => expect(startThread).toHaveBeenCalledTimes(2));
+    expect(startThread).toHaveBeenNthCalledWith(1, "ws-1");
+    expect(startThread).toHaveBeenNthCalledWith(2, "ws-1");
+    await waitFor(() =>
+      expect(sendUserMessage).toHaveBeenNthCalledWith(
+        1,
+        "ws-1",
+        "thread-1",
+        "task 1 prompt",
+        expect.any(Object),
+      ),
+    );
+    await waitFor(() =>
+      expect(sendUserMessage).toHaveBeenNthCalledWith(
+        2,
+        "ws-1",
+        "thread-2",
+        "task 2 prompt",
+        expect.any(Object),
+      ),
+    );
+    expect(onSelectThread).toHaveBeenNthCalledWith(1, "ws-1", "thread-1");
+    expect(onSelectThread).toHaveBeenNthCalledWith(2, "ws-1", "thread-2");
+  });
+
+  it("shows in-progress task and phase while execution is running", async () => {
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [{ id: "task-1", name: "Task 1", status: "pending" }],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      getNextPhasePrompt: async () => ({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 1 prompt",
+      }),
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run plan" }));
+
+    expect(await screen.findByText("Phase implementation in progress")).toBeTruthy();
+    const row = screen.getByText("Task 1").closest("li");
+    expect(row?.className.includes("inProgress")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
+  });
 });
