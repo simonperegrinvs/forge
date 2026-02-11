@@ -7,3 +7,4 @@
 - 2026-02-11 iter 0: `uninstall_template_core` removes only `.agent/templates/<installed_template_id>/` and `.agent/template-lock.json`; `.agent/skills`, `.agents/skills`, and `.git/info/exclude` entries are left intact.
 - 2026-02-11 iter 0: Plan listing ignores dot-prefixed entries under `plans/` and deduplicates duplicate plan IDs by keeping the newest `updatedAtMs`.
 - 2026-02-11 iter 0: Legacy plan prompts are only rewritten into plan-mode output requirements when `## Output` exists and one of these markers is present: `After writing the file`, `Create \`plans/<plan_id>`, or `Path: plans/<plan_id>`.
+- 2026-02-11 iter 0: README discoverability is best handled with a dedicated `## Forge` section that links once to `docs/forge.md` and leaves implementation details in the canonical doc.
