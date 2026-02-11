@@ -1,70 +1,96 @@
 {
   "$schema": "state-v2",
   "plan_id": "document-forge-module",
+  "iteration": 0,
+  "summary": "Task 1 complete: `docs/forge.md` now has a code-anchored Forge doc outline covering IPC commands, local/remote proxying, workspace artifacts, template manifest/entrypoints, plan-state read rules, and troubleshooting. Next: fill command-level behavior details.",
   "tasks": [
     {
       "id": "task-1",
       "status": "completed",
-      "commit_sha": "7abd880ac196bfb9f3cb765ec4dd40b74858efa3",
+      "attempts": 1,
+      "notes": "Updated `docs/forge.md` to a canonical section outline with exact IPC names (`forge_list_bundled_templates`, `forge_get_installed_template`, `forge_install_template`, `forge_uninstall_template`, `forge_list_plans`, `forge_get_plan_prompt`) and implementation paths in app/shared/daemon/frontend files. Included local vs remote proxy behavior, `.agent`/`.agents/skills`/`plans` artifact layout, `template.json` entrypoint fields, `plan-v1` + `state-v2` practical read rules/status sourcing, and troubleshooting for missing templates root, missing lock, and missing installed template dir.",
+      "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "completed"
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Refined `docs/forge.md` outline to keep only live-state content and explicit source anchors."
         }
       ]
     },
     {
       "id": "task-2",
       "status": "pending",
-      "commit_sha": "544b0b4",
+      "attempts": 0,
+      "notes": "",
+      "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending"
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
         }
       ]
     },
     {
       "id": "task-3",
       "status": "pending",
+      "attempts": 0,
+      "notes": "",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending"
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
         }
       ]
     },
     {
       "id": "task-4",
       "status": "pending",
+      "attempts": 0,
+      "notes": "",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending"
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
         }
       ]
     },
     {
       "id": "task-5",
       "status": "pending",
+      "attempts": 0,
+      "notes": "",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending"
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
         }
       ]
     },
     {
       "id": "task-6",
       "status": "pending",
+      "attempts": 0,
+      "notes": "",
       "commit_sha": null,
       "phases": [
         {
           "id": "implementation",
-          "status": "pending"
+          "status": "pending",
+          "attempts": 0,
+          "notes": ""
         }
       ]
     }
