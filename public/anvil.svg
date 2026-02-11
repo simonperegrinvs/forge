@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Anvil top surface -->
+  <path d="M2 10l2-1h16l2 1-2 1H4l-2-1z"/>
+  <!-- Anvil body -->
+  <path d="M7 11v4l-1.5 4h11L15 15v-4"/>
+  <!-- Anvil base -->
+  <path d="M4.5 19h15"/>
+</svg>

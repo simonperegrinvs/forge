@@ -50,6 +50,10 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onRefreshAllThreads={options.onRefreshAllThreads}
       activeWorkspaceId={options.activeWorkspaceId}
       activeThreadId={options.activeThreadId}
+      activeWorkspace={options.activeWorkspace}
+      sendUserMessageToThread={options.sendUserMessageToThread}
+      collaborationModes={options.collaborationModes}
+      onSelectCollaborationMode={options.onSelectCollaborationMode}
       accountRateLimits={options.activeRateLimits}
       usageShowRemaining={options.usageShowRemaining}
       accountInfo={options.accountInfo}
@@ -102,6 +106,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       userInputRequests={options.userInputRequests}
       onUserInputSubmit={options.handleUserInputSubmit}
       onPlanAccept={options.onPlanAccept}
+      onPlanExport={options.onPlanExport}
       onPlanSubmitChanges={options.onPlanSubmitChanges}
       onOpenThreadLink={options.onOpenThreadLink}
       isThinking={options.isProcessing}

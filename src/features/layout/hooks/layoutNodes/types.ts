@@ -127,7 +127,17 @@ export type LayoutNodesOptions = {
     response: RequestUserInputResponse,
   ) => void;
   onPlanAccept?: () => void;
+  onPlanExport?: () => void;
   onPlanSubmitChanges?: (changes: string) => void;
+  sendUserMessageToThread: (
+    workspace: WorkspaceInfo,
+    threadId: string,
+    message: string,
+    imageIds: string[],
+    options?: {
+      collaborationMode?: Record<string, unknown> | null;
+    },
+  ) => Promise<void>;
   onOpenSettings: () => void;
   onOpenDictationSettings?: () => void;
   onOpenDebug: () => void;

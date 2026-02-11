@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { CollaborationModeOption, WorkspaceInfo } from "../../../types";
 import {
   makePlanReadyAcceptMessage,
+  makePlanReadyExportMessage,
   makePlanReadyChangesMessage,
 } from "../../../utils/internalPlanReadyMessages";
 
@@ -68,13 +69,18 @@ export function usePlanReadyActions({
         return null;
       }
 
+      const modelValue = (resolvedModel ?? mode.model ?? "").trim();
+      if (!modelValue) {
+        // CollaborationMode.settings.model is required by the app-server protocol.
+        // If we can't supply it, skip setting a collaborationMode override.
+        return null;
+      }
+
       const settings: Record<string, unknown> = {
         developer_instructions: mode.developerInstructions ?? null,
+        model: modelValue,
       };
 
-      if (resolvedModel) {
-        settings.model = resolvedModel;
-      }
       if (resolvedEffort !== null) {
         settings.reasoning_effort = resolvedEffort;
       }
@@ -108,6 +114,44 @@ export function usePlanReadyActions({
       activeWorkspace,
       activeThreadId,
       makePlanReadyAcceptMessage(),
+      [],
+      collaborationMode ? { collaborationMode } : undefined,
+    );
+  }, [
+    activeThreadId,
+    activeWorkspace,
+    buildCollaborationModePayloadFor,
+    collaborationModes,
+    connectWorkspace,
+    findCollaborationMode,
+    sendUserMessageToThread,
+    setSelectedCollaborationModeId,
+  ]);
+
+  const handlePlanExport = useCallback(async () => {
+    if (!activeWorkspace || !activeThreadId) {
+      return;
+    }
+
+    if (!activeWorkspace.connected) {
+      await connectWorkspace(activeWorkspace);
+    }
+
+    const defaultMode =
+      findCollaborationMode("default") ??
+      findCollaborationMode("code") ??
+      collaborationModes[0] ??
+      null;
+
+    if (defaultMode?.id) {
+      setSelectedCollaborationModeId(defaultMode.id);
+    }
+
+    const collaborationMode = buildCollaborationModePayloadFor(defaultMode);
+    await sendUserMessageToThread(
+      activeWorkspace,
+      activeThreadId,
+      makePlanReadyExportMessage(),
       [],
       collaborationMode ? { collaborationMode } : undefined,
     );
@@ -160,6 +204,7 @@ export function usePlanReadyActions({
 
   return {
     handlePlanAccept,
+    handlePlanExport,
     handlePlanSubmitChanges,
   };
 }

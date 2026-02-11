@@ -43,6 +43,13 @@ CodexMonitor is a Tauri app for orchestrating multiple Codex agents across local
 - Terminal dock with multiple tabs for background commands (experimental).
 - In-app updates with toast-driven download/install, debug panel copy/clear, sound notifications, plus platform-specific window effects (macOS overlay title bar + vibrancy) and a reduced transparency toggle.
 
+## Forge
+
+- Canonical Forge module docs: [docs/forge.md](docs/forge.md).
+- Installs and uninstalls bundled Forge templates into workspace-scoped `.agent` artifacts.
+- Returns a normalized template plan prompt for plan mode (including compatibility rewrites and `@plan` enforcement).
+- Lists workspace plans and joins task status from matching `state-v2` files.
+
 ## Requirements
 
 - Node.js + npm

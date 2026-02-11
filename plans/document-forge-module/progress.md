@@ -1,0 +1,16 @@
+- 2026-02-11 iter 0: Bundled Forge templates live under `src-tauri/resources/forge/templates` (dev fallback via `env!(\"CARGO_MANIFEST_DIR\")`).
+- 2026-02-11 iter 0: `forge_plans_core::resolve_state_path` checks four state filename patterns and only applies task statuses when `"$schema"` is `state-v2`; otherwise statuses default to `pending`.
+- 2026-02-11 iter 0: `forge_templates_core::normalize_plan_prompt` rewrites `.agent/skills/` to `.agents/skills/`, rewrites flat `plans/<plan_id>.json` paths to `plans/<plan_id>/plan.json`, and prepends `@plan` when absent.
+- 2026-02-11 iter 0: Forge template/plan IPC is registered in `src-tauri/src/lib.rs`, locally served by `src-tauri/src/forge/mod.rs`, and remote-proxied by method name through `src-tauri/src/remote_backend/mod.rs` to daemon RPC dispatch in `src-tauri/src/bin/codex_monitor_daemon/rpc.rs`.
+- 2026-02-11 iter 0: `forge_plans_core::list_plans_core` always returns `currentTaskId: null`; task statuses come only from matching `state-v2` task IDs (otherwise `pending`).
+- 2026-02-11 iter 0: Forge remote RPC for void-style commands (`forge_uninstall_template`, `forge_prepare_execution`, `forge_reset_execution_progress`) returns `{ "ok": true }` from daemon `rpc.rs`, while app-side TS wrappers expose `Promise<void>`.
+- 2026-02-11 iter 0: `uninstall_template_core` removes only `.agent/templates/<installed_template_id>/` and `.agent/template-lock.json`; `.agent/skills`, `.agents/skills`, and `.git/info/exclude` entries are left intact.
+- 2026-02-11 iter 0: Plan listing ignores dot-prefixed entries under `plans/` and deduplicates duplicate plan IDs by keeping the newest `updatedAtMs`.
+- 2026-02-11 iter 0: Legacy plan prompts are only rewritten into plan-mode output requirements when `## Output` exists and one of these markers is present: `After writing the file`, `Create \`plans/<plan_id>`, or `Path: plans/<plan_id>`.
+- 2026-02-11 iter 0: README discoverability is best handled with a dedicated `## Forge` section that links once to `docs/forge.md` and leaves implementation details in the canonical doc.
+- 2026-02-11 iter 0: A task-1-ready `docs/forge.md` should be an explicit outline only, but still include exact Forge command names and concrete implementation file paths so later tasks can fill content without re-discovery.
+- 2026-02-11 iter 0: For task-2 docs, include all current `forge_*` invokes (template, plans, and execution helpers), not just template/plan commands, so the command matrix stays aligned with `lib.rs` registration and `tauri.ts` wrappers.
+- 2026-02-11 iter 0: Forge install uses ".git/info/exclude" for `.agent/` (idempotent, no tracked .gitignore change), and `.agent/skills` -> `.agents/skills` sync is best-effort and non-overwriting.
+- 2026-02-11 iter 0: `forge_list_plans` derives plan identity from plan JSON `id` (not file path), then resolves state via ordered candidates and only imports statuses from `state-v2`; otherwise every task defaults to `pending`.
+- 2026-02-11 iter 0: Prompt normalization prepends `@plan` unless the first non-empty line is exactly `@plan`; for empty prompt files it returns exactly `@plan\n`.
+- 2026-02-11 iter 0: `resolve_state_path` is first-match ordered; a sibling `state.json` or `<stem>.state.json` overrides `plans/<planId>.state.json` and `plans/<planId>/state.json` when multiple files exist.

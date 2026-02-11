@@ -128,6 +128,17 @@ fn can_retry_after_disconnect(method: &str) -> bool {
             | "collaboration_mode_list"
             | "connect_workspace"
             | "file_read"
+            | "forge_get_installed_template"
+            | "forge_get_plan_prompt"
+            | "forge_get_next_phase_prompt"
+            | "forge_get_phase_status"
+            | "forge_install_template"
+            | "forge_list_bundled_templates"
+            | "forge_list_plans"
+            | "forge_prepare_execution"
+            | "forge_reset_execution_progress"
+            | "forge_run_phase_checks"
+            | "forge_uninstall_template"
             | "get_config_model"
             | "get_git_commit_diff"
             | "get_commit_message_prompt"
@@ -257,6 +268,9 @@ mod tests {
         assert!(can_retry_after_disconnect("list_threads"));
         assert!(can_retry_after_disconnect("get_commit_message_prompt"));
         assert!(can_retry_after_disconnect("local_usage_snapshot"));
+        assert!(can_retry_after_disconnect("forge_list_plans"));
+        assert!(can_retry_after_disconnect("forge_get_plan_prompt"));
+        assert!(can_retry_after_disconnect("forge_reset_execution_progress"));
         assert!(!can_retry_after_disconnect("send_user_message"));
         assert!(!can_retry_after_disconnect("start_thread"));
         assert!(!can_retry_after_disconnect("remove_workspace"));

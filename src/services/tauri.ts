@@ -929,3 +929,174 @@ export async function sendNotification(
 
   await attemptFallback();
 }
+
+export type ForgeBundledTemplateInfo = {
+  id: string;
+  title: string;
+  version: string;
+};
+
+export type ForgeTemplateLock = {
+  schema: string;
+  installedTemplateId: string;
+  installedTemplateVersion: string;
+  installedAtIso: string;
+  installedFiles: string[];
+};
+
+export type ForgePlanTask = {
+  id: string;
+  name: string;
+  status: string;
+};
+
+export type ForgeWorkspacePlan = {
+  id: string;
+  title?: string | null;
+  goal: string;
+  tasks: ForgePlanTask[];
+  currentTaskId: string | null;
+  planPath: string;
+  updatedAtMs: number;
+};
+
+export type ForgeNextPhasePrompt = {
+  planId: string;
+  taskId: string;
+  phaseId: string;
+  isLastPhase: boolean;
+  promptText: string;
+};
+
+export type ForgePhaseStatus = {
+  status: string;
+  commitSha?: string | null;
+};
+
+export type ForgePhaseCheckResult = {
+  id: string;
+  title: string;
+  exitCode: number;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+};
+
+export type ForgeRunPhaseChecksResponse = {
+  ok: boolean;
+  results: ForgePhaseCheckResult[];
+};
+
+export async function forgeListBundledTemplates(): Promise<ForgeBundledTemplateInfo[]> {
+  try {
+    return await invoke<ForgeBundledTemplateInfo[]>("forge_list_bundled_templates");
+  } catch (error) {
+    if (isMissingTauriInvokeError(error)) {
+      console.warn(
+        "Tauri invoke bridge unavailable; returning empty bundled forge templates list.",
+      );
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function forgeGetInstalledTemplate(
+  workspaceId: string,
+): Promise<ForgeTemplateLock | null> {
+  try {
+    return await invoke<ForgeTemplateLock | null>("forge_get_installed_template", {
+      workspaceId,
+    });
+  } catch (error) {
+    if (isMissingTauriInvokeError(error)) {
+      console.warn(
+        "Tauri invoke bridge unavailable; returning null installed forge template.",
+      );
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function forgeInstallTemplate(
+  workspaceId: string,
+  templateId: string,
+): Promise<ForgeTemplateLock> {
+  return invoke<ForgeTemplateLock>("forge_install_template", { workspaceId, templateId });
+}
+
+export async function forgeUninstallTemplate(workspaceId: string): Promise<void> {
+  await invoke("forge_uninstall_template", { workspaceId });
+}
+
+export async function forgeListPlans(workspaceId: string): Promise<ForgeWorkspacePlan[]> {
+  try {
+    return await invoke<ForgeWorkspacePlan[]>("forge_list_plans", { workspaceId });
+  } catch (error) {
+    if (isMissingTauriInvokeError(error)) {
+      console.warn(
+        "Tauri invoke bridge unavailable; returning empty forge plans list.",
+      );
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function forgeGetPlanPrompt(workspaceId: string): Promise<string> {
+  return invoke<string>("forge_get_plan_prompt", { workspaceId });
+}
+
+export async function forgePrepareExecution(
+  workspaceId: string,
+  planId: string,
+): Promise<void> {
+  await invoke("forge_prepare_execution", { workspaceId, planId });
+}
+
+export async function forgeResetExecutionProgress(
+  workspaceId: string,
+  planId: string,
+): Promise<void> {
+  await invoke("forge_reset_execution_progress", { workspaceId, planId });
+}
+
+export async function forgeGetNextPhasePrompt(
+  workspaceId: string,
+  planId: string,
+): Promise<ForgeNextPhasePrompt | null> {
+  return invoke<ForgeNextPhasePrompt | null>("forge_get_next_phase_prompt", {
+    workspaceId,
+    planId,
+  });
+}
+
+export async function forgeGetPhaseStatus(
+  workspaceId: string,
+  planId: string,
+  taskId: string,
+  phaseId: string,
+): Promise<ForgePhaseStatus> {
+  return invoke<ForgePhaseStatus>("forge_get_phase_status", {
+    workspaceId,
+    planId,
+    taskId,
+    phaseId,
+  });
+}
+
+export async function forgeRunPhaseChecks(
+  workspaceId: string,
+  planId: string,
+  taskId: string,
+  phaseId: string,
+): Promise<ForgeRunPhaseChecksResponse> {
+  return invoke<ForgeRunPhaseChecksResponse>("forge_run_phase_checks", {
+    workspaceId,
+    planId,
+    taskId,
+    phaseId,
+  });
+}

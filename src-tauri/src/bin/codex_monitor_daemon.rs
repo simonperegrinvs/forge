@@ -85,8 +85,9 @@ use backend::events::{AppServerEvent, EventSink, TerminalExit, TerminalOutput};
 use shared::codex_core::CodexLoginCancelState;
 use shared::prompts_core::{self, CustomPromptEntry};
 use shared::{
-    codex_aux_core, codex_core, files_core, git_core, git_ui_core, local_usage_core, settings_core,
-    workspaces_core, worktree_core,
+    codex_aux_core, codex_core, files_core, forge_execute_core, forge_plans_core,
+    forge_templates_core, git_core, git_ui_core, local_usage_core, settings_core, workspaces_core,
+    worktree_core,
 };
 use storage::{read_settings, read_workspaces};
 use types::{
@@ -608,6 +609,139 @@ impl DaemonState {
         content: String,
     ) -> Result<(), String> {
         files_core::file_write_core(&self.workspaces, scope, kind, workspace_id, content).await
+    }
+
+    fn bundled_templates_root_for_daemon(&self) -> Result<PathBuf, String> {
+        // Dev fallback: when running the daemon from `cargo run`, use the crate directory.
+        let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let dev_root = manifest_root.join("resources").join("forge").join("templates");
+        if dev_root.is_dir() {
+            return Ok(dev_root);
+        }
+
+        let exe = std::env::current_exe().map_err(|err| err.to_string())?;
+        forge_templates_core::find_bundled_templates_root_near_exe(&exe)
+            .ok_or_else(|| "Unable to locate bundled forge templates".to_string())
+    }
+
+    async fn workspace_root_for_id(&self, workspace_id: &str) -> Result<PathBuf, String> {
+        let workspaces = self.workspaces.lock().await;
+        let entry = workspaces
+            .get(workspace_id)
+            .ok_or_else(|| "workspace not found".to_string())?;
+        Ok(PathBuf::from(&entry.path))
+    }
+
+    async fn forge_list_bundled_templates(
+        &self,
+    ) -> Result<Vec<forge_templates_core::ForgeBundledTemplateInfo>, String> {
+        let root = self.bundled_templates_root_for_daemon()?;
+        forge_templates_core::list_bundled_templates_core(&root)
+    }
+
+    async fn forge_get_installed_template(
+        &self,
+        workspace_id: String,
+    ) -> Result<Option<forge_templates_core::ForgeTemplateLockV1>, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        if let Err(err) =
+            forge_templates_core::sync_agent_skills_into_repo_agents_dir_core(&workspace_root)
+        {
+            eprintln!("forge_get_installed_template: failed to sync skills into .agents: {err}");
+        }
+        forge_templates_core::read_installed_template_lock_core(&workspace_root)
+    }
+
+    async fn forge_install_template(
+        &self,
+        workspace_id: String,
+        template_id: String,
+    ) -> Result<forge_templates_core::ForgeTemplateLockV1, String> {
+        let templates_root = self.bundled_templates_root_for_daemon()?;
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        let lock = forge_templates_core::install_bundled_template_core(
+            &templates_root,
+            &workspace_root,
+            template_id.trim(),
+        )?;
+        if let Err(err) =
+            forge_templates_core::sync_agent_skills_into_repo_agents_dir_core(&workspace_root)
+        {
+            eprintln!("forge_install_template: failed to sync skills into .agents: {err}");
+        }
+        Ok(lock)
+    }
+
+    async fn forge_uninstall_template(&self, workspace_id: String) -> Result<(), String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_templates_core::uninstall_template_core(&workspace_root)
+    }
+
+    async fn forge_list_plans(
+        &self,
+        workspace_id: String,
+    ) -> Result<Vec<forge_plans_core::ForgeWorkspacePlanV1>, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_plans_core::list_plans_core(&workspace_root)
+    }
+
+    async fn forge_get_plan_prompt(&self, workspace_id: String) -> Result<String, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        if let Err(err) =
+            forge_templates_core::sync_agent_skills_into_repo_agents_dir_core(&workspace_root)
+        {
+            eprintln!("forge_get_plan_prompt: failed to sync skills into .agents: {err}");
+        }
+        forge_templates_core::read_installed_template_plan_prompt_core(&workspace_root)
+    }
+
+    async fn forge_prepare_execution(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+    ) -> Result<(), String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_prepare_execution_core(&workspace_root, &plan_id).await
+    }
+
+    async fn forge_reset_execution_progress(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+    ) -> Result<(), String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_reset_execution_progress_core(&workspace_root, &plan_id).await
+    }
+
+    async fn forge_get_next_phase_prompt(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+    ) -> Result<Option<forge_execute_core::ForgeNextPhasePromptV1>, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_get_next_phase_prompt_core(&workspace_root, &plan_id).await
+    }
+
+    async fn forge_get_phase_status(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+        task_id: String,
+        phase_id: String,
+    ) -> Result<forge_execute_core::ForgePhaseStatusV1, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_get_phase_status_core(&workspace_root, &plan_id, &task_id, &phase_id)
+    }
+
+    async fn forge_run_phase_checks(
+        &self,
+        workspace_id: String,
+        plan_id: String,
+        task_id: String,
+        phase_id: String,
+    ) -> Result<forge_execute_core::ForgeRunPhaseChecksResponseV1, String> {
+        let workspace_root = self.workspace_root_for_id(&workspace_id).await?;
+        forge_execute_core::forge_run_phase_checks_core(&workspace_root, &plan_id, &task_id, &phase_id).await
     }
 
     async fn start_thread(&self, workspace_id: String) -> Result<Value, String> {

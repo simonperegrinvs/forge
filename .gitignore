@@ -27,6 +27,7 @@ CodexMonitor.zip
 .codex-worktrees/
 .codexmonitor/
 public/assets/material-icons/
+/plans/
 
 # Nix
 result

@@ -272,6 +272,78 @@ pub(super) async fn handle_rpc_request(
                 .await?;
             serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
         }
+        "forge_list_bundled_templates" => {
+            let templates = state.forge_list_bundled_templates().await?;
+            serde_json::to_value(templates).map_err(|err| err.to_string())
+        }
+        "forge_get_installed_template" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let installed = state.forge_get_installed_template(workspace_id).await?;
+            serde_json::to_value(installed).map_err(|err| err.to_string())
+        }
+        "forge_install_template" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let template_id = parse_string(&params, "templateId")?;
+            let installed = state
+                .forge_install_template(workspace_id, template_id)
+                .await?;
+            serde_json::to_value(installed).map_err(|err| err.to_string())
+        }
+        "forge_uninstall_template" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.forge_uninstall_template(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "forge_list_plans" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plans = state.forge_list_plans(workspace_id).await?;
+            serde_json::to_value(plans).map_err(|err| err.to_string())
+        }
+        "forge_get_plan_prompt" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let prompt = state.forge_get_plan_prompt(workspace_id).await?;
+            serde_json::to_value(prompt).map_err(|err| err.to_string())
+        }
+        "forge_prepare_execution" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            state.forge_prepare_execution(workspace_id, plan_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "forge_reset_execution_progress" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            state
+                .forge_reset_execution_progress(workspace_id, plan_id)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "forge_get_next_phase_prompt" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            let prompt = state.forge_get_next_phase_prompt(workspace_id, plan_id).await?;
+            serde_json::to_value(prompt).map_err(|err| err.to_string())
+        }
+        "forge_get_phase_status" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            let task_id = parse_string(&params, "taskId")?;
+            let phase_id = parse_string(&params, "phaseId")?;
+            let status = state
+                .forge_get_phase_status(workspace_id, plan_id, task_id, phase_id)
+                .await?;
+            serde_json::to_value(status).map_err(|err| err.to_string())
+        }
+        "forge_run_phase_checks" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let plan_id = parse_string(&params, "planId")?;
+            let task_id = parse_string(&params, "taskId")?;
+            let phase_id = parse_string(&params, "phaseId")?;
+            let result = state
+                .forge_run_phase_checks(workspace_id, plan_id, task_id, phase_id)
+                .await?;
+            serde_json::to_value(result).map_err(|err| err.to_string())
+        }
         "get_app_settings" => {
             let settings = state.get_app_settings().await;
             serde_json::to_value(settings).map_err(|err| err.to_string())

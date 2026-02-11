@@ -29,6 +29,10 @@ const baseProps = {
   onRefreshAllThreads: vi.fn(),
   activeWorkspaceId: null,
   activeThreadId: null,
+  activeWorkspace: null,
+  sendUserMessageToThread: vi.fn(async () => {}),
+  collaborationModes: [],
+  onSelectCollaborationMode: vi.fn(),
   accountRateLimits: null,
   usageShowRemaining: false,
   accountInfo: null,
@@ -68,6 +72,44 @@ const baseProps = {
 };
 
 describe("Sidebar", () => {
+  it("toggles Forge panel from the header anvil icon", () => {
+    render(<Sidebar {...baseProps} />);
+
+    expect(screen.queryByText("Forge")).toBeNull();
+    expect(screen.getByText("Add a workspace to start.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
+
+    expect(screen.getByText("Forge")).toBeTruthy();
+    expect(screen.getByText("Click to select")).toBeTruthy();
+    expect(screen.queryByText("Add a workspace to start.")).toBeNull();
+
+    const runButton = screen.getByRole("button", { name: "Resume plan" });
+    expect(runButton.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("closes Forge when the search toggle is activated", () => {
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
+    expect(screen.getByText("Forge")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle search" }));
+    expect(screen.queryByText("Forge")).toBeNull();
+    expect(screen.getByLabelText("Search projects")).toBeTruthy();
+  });
+
+  it("shows Forge plan menu actions", () => {
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Click to select/i }));
+
+    expect(screen.getByText("Other...")).toBeTruthy();
+    expect(screen.getByText("New plan...")).toBeTruthy();
+  });
+
   it("toggles the search bar from the header icon", () => {
     vi.useFakeTimers();
     render(<Sidebar {...baseProps} />);

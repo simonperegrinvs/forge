@@ -1,0 +1,98 @@
+{
+  "$schema": "state-v2",
+  "plan_id": "document-forge-module",
+  "iteration": 0,
+  "summary": "Task 6 implemented: README now has a dedicated Forge discoverability section linking docs/forge.md once, with concise bullets for templates, normalized plan prompts, and plan listing/status join. Next: run Forge verification checks and finalize commit.",
+  "tasks": [
+    {
+      "id": "task-1",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Created docs/forge.md as an explicit section-by-section outline grounded in live code paths. Included exact IPC names (forge_list_bundled_templates, forge_get_installed_template, forge_install_template, forge_uninstall_template, forge_list_plans, forge_get_plan_prompt) and implementation paths across src-tauri/src/lib.rs, src-tauri/src/forge/mod.rs, src-tauri/src/remote_backend/mod.rs, src-tauri/src/bin/codex_monitor_daemon/rpc.rs, src-tauri/src/bin/codex_monitor_daemon.rs, src-tauri/src/shared/forge_templates_core.rs, and src-tauri/src/shared/forge_plans_core.rs. Captured required outline sections for workspace artifacts, template manifest entrypoints, plan/state conventions, prompt normalization, and troubleshooting error cases.",
+      "commit_sha": "83f4ddf9e52524cc4de652988a814f19f9d675dc",
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Replaced docs/forge.md content with a concrete documentation outline containing exact command names and code file references required for downstream documentation tasks."
+        }
+      ]
+    },
+    {
+      "id": "task-2",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Expanded docs/forge.md from outline to canonical backend command documentation. Added a Forge command matrix covering every current forge_* invoke with frontend wrapper function, app handler path, local shared-core function path, and remote JSON-RPC method/param shape using exact camelCase keys (workspaceId/templateId/planId/taskId/phaseId). Added local-vs-remote routing narrative (invoke -> app handler -> remote_backend::call_remote -> daemon rpc.rs -> daemon state method -> shared core), explicit notes about retry allowlist coverage, bundled_templates_root_for_app resolution order (resource_dir forge/templates, resource_dir resources/forge/templates, CARGO_MANIFEST_DIR dev fallback, near-exe fallback), and error implications. Added short end-to-end narratives for template install and plan prompt retrieval for plan creation.",
+      "commit_sha": "f44c9365dfdd47faa4b3e51537463a10b0d724ce",
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Documented backend Forge command flow in docs/forge.md with per-command input/output contracts, local shared-core mapping, remote JSON-RPC param shapes, TS wrapper references, plus install/prompt flow narratives and bundled template root resolution/error behavior."
+        }
+      ]
+    },
+    {
+      "id": "task-3",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Expanded docs/forge.md with a template-centric section grounded in src-tauri/src/shared/forge_templates_core.rs and forge_execute_core.rs. Documented bundled layout src-tauri/resources/forge/templates/<template-id>/, required template.json, manifest field semantics (schema/id/title/version/files/entrypoints with planPrompt, executePrompt, phases, planSchema, stateSchema, requiredSkills, hooks). Documented install artifacts under .agent/templates/<template-id>/..., .agent/template-lock.json with schema forge-template-lock-v1, skill mirroring to .agent/skills from files entries under skills/, best-effort sync into .agents/skills with explicit non-overwrite behavior, and .git/info/exclude .agent/ rationale. Documented uninstall scope as only .agent/templates/<installed_template_id>/ and .agent/template-lock.json.",
+      "commit_sha": "ef0787bf84408b0c4808e26bdaecf41fe8d7ff61",
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Updated docs/forge.md to cover bundled template manifest contract and installed/uninstalled workspace artifacts, including forge-template-lock-v1, .agent/.agents skill bridge, non-overwrite sync, and .git/info/exclude behavior."
+        }
+      ]
+    },
+    {
+      "id": "task-4",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Added a dedicated 'Plan and State File Conventions (forge_list_plans)' section to docs/forge.md based on src-tauri/src/shared/forge_plans_core.rs. Documented recursive plans/ scanning, plan-v1 requirement, plan id source from plan JSON id, legacy phase-plan rejection, ordered task-id validation, resolve_state_path candidate order (state.json, <stem>.state.json, plans/<planId>.state.json, plans/<planId>/state.json), task status join rules (state-v2 only), pending default semantics, current_task_id/currentTaskId behavior, and dedupe/sort rules. Included multiple concrete plan/state path examples.",
+      "commit_sha": null,
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Updated docs/forge.md with code-grounded plan/state conventions and resolver examples satisfying task verification requirements."
+        }
+      ]
+    },
+    {
+      "id": "task-5",
+      "status": "in_progress",
+      "attempts": 1,
+      "notes": "Added a 'Plan Prompt Normalization and Plan-Mode Compatibility' section in docs/forge.md based on src-tauri/src/shared/forge_templates_core.rs::normalize_plan_prompt. Documented exact string replacements (.agent/skills/ -> .agents/skills/, plans/<plan_id>.json -> plans/<plan_id>/plan.json, plans/<plan-id>.json -> plans/<plan-id>/plan.json), legacy rewrite trigger markers (After writing the file / Create `plans/<plan_id> / Path: plans/<plan_id>) gated by ## Output, the replacement plan-mode output requirements, and @plan prefix behavior.",
+      "commit_sha": "acfec0aa79648615c1ab9a8eb44cf8f2e0b7bed5",
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "completed",
+          "attempts": 1,
+          "notes": "Updated docs/forge.md with a canonical prompt-normalization section listing exact before/after rewrite strings and @plan enforcement rules used by normalize_plan_prompt."
+        }
+      ]
+    },
+    {
+      "id": "task-6",
+      "status": "completed",
+      "attempts": 1,
+      "notes": "Updated README.md Forge section wording to make docs/forge.md the canonical discoverability link while keeping a single link occurrence and 4 high-level bullets (template install/uninstall, normalized plan prompt behavior, and plan listing with state-v2 join). No docs/forge.md content changes were required.",
+      "commit_sha": "29bc7899a0e9956422da32799825b72f003b5a81",
+      "phases": [
+        {
+          "id": "implementation",
+          "status": "completed",
+          "attempts": 1,
+          "notes": "README.md Forge section verified as easy to find and updated with canonical docs link phrasing; section retains concise non-duplicative bullets aligned with docs/forge.md."
+        }
+      ]
+    }
+  ]
+}

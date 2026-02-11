@@ -222,7 +222,8 @@
   box-shadow: none;
 }
 
-.sidebar-search-toggle {
+.sidebar-search-toggle,
+.sidebar-forge-toggle {
   width: 28px;
   height: 28px;
   padding: 0;
@@ -273,20 +274,24 @@
   }
 }
 
-.sidebar-search-toggle svg {
+.sidebar-search-toggle svg,
+.sidebar-forge-toggle svg {
   width: 14px;
   height: 14px;
 }
 
 .sidebar-search-toggle:hover,
-.sidebar-search-toggle:focus-visible {
+.sidebar-search-toggle:focus-visible,
+.sidebar-forge-toggle:hover,
+.sidebar-forge-toggle:focus-visible {
   color: var(--text-strong);
   background: var(--surface-hover);
   transform: none;
   box-shadow: none;
 }
 
-.sidebar-search-toggle.is-active {
+.sidebar-search-toggle.is-active,
+.sidebar-forge-toggle.is-active {
   color: var(--text-strong);
   background: var(--surface-hover);
   box-shadow: inset 0 0 0 1px var(--border-quiet);

@@ -26,6 +26,8 @@ import "./styles/prompts.css";
 import "./styles/debug.css";
 import "./styles/terminal.css";
 import "./styles/plan.css";
+import "./styles/forge.css";
+import "./styles/material-symbols.css";
 import "./styles/about.css";
 import "./styles/tabbar.css";
 import "./styles/worktree-modal.css";
@@ -1618,7 +1620,7 @@ function MainApp() {
     ],
   );
 
-  const { handlePlanAccept, handlePlanSubmitChanges } = usePlanReadyActions({
+  const { handlePlanAccept, handlePlanExport, handlePlanSubmitChanges } = usePlanReadyActions({
     activeWorkspace,
     activeThreadId,
     collaborationModes,
@@ -1799,7 +1801,9 @@ function MainApp() {
     handleApprovalRemember,
     handleUserInputSubmit,
     onPlanAccept: handlePlanAccept,
+    onPlanExport: handlePlanExport,
     onPlanSubmitChanges: handlePlanSubmitChanges,
+    sendUserMessageToThread,
     onOpenSettings: () => openSettings(),
     onOpenDictationSettings: () => openSettings("dictation"),
     onOpenDebug: handleDebugClick,
