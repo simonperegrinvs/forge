@@ -1,0 +1,14 @@
+{
+  "schema": "forge-phases-v1",
+  "phases": [
+    {
+      "id": "implementation",
+      "title": "Implementation",
+      "iconId": "code_blocks",
+      "order": 1,
+      "goal": "Implement the task changes and record progress in state.json.",
+      "description": "Complete the task in one commit. If checks fail after committing, fix issues and amend the same commit until checks pass.",
+      "checks": []
+    }
+  ]
+}
