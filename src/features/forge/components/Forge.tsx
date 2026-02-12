@@ -685,6 +685,10 @@ export function Forge({
       null;
     return buildCollaborationModePayloadFor(mode);
   }, [buildCollaborationModePayloadFor, collaborationModes, findCollaborationMode]);
+  const selectedPlanTaskIds = useMemo(
+    () => selectedPlan?.items.map((item) => item.id) ?? null,
+    [selectedPlan],
+  );
 
   const {
     isExecuting,
@@ -694,6 +698,7 @@ export function Forge({
     pauseExecution,
   } = useForgeExecution({
     workspaceId: activeWorkspaceId,
+    knownTaskIds: selectedPlanTaskIds,
     connectWorkspace: connectWorkspaceToRun,
     prepareExecution,
     getNextPhasePrompt,

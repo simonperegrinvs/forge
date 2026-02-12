@@ -49,6 +49,7 @@ CodexMonitor is a Tauri app for orchestrating multiple Codex agents across local
 - Forge panel remains available from the sidebar header even when no project is selected.
 - No-project mode is explicit and blocking: Forge shows `Select a project first to use Forge.` and disables template, plan, execution, and clean-progress actions.
 - During execution, Forge renders exactly one running task row from live `runningInfo`; non-active stale `in_progress` rows are demoted to `completed` (all phases complete) or `pending` (otherwise).
+- Execution is plan-scoped: Forge validates each backend `forge_get_next_phase_prompt` task id against the selected plan's visible task ids before `startThread`; unexpected tasks stop with a visible error and no extra session/thread is created.
 - With a selected project, Forge installs/uninstalls bundled templates into workspace-scoped `.agent` artifacts, returns normalized plan prompts, and lists workspace plans with `state-v2` task status joins.
 
 ## Requirements

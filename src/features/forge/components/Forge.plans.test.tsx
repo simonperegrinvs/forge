@@ -487,7 +487,8 @@ describe("Forge plans", () => {
     const startThread = vi
       .fn<ForgePlansClient["startThread"]>()
       .mockResolvedValueOnce({ result: { thread: { id: "thread-1" } } })
-      .mockResolvedValueOnce({ result: { thread: { id: "thread-2" } } });
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-2" } } })
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-3" } } });
     const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
     const getNextPhasePrompt = vi
       .fn<ForgePlansClient["getNextPhasePrompt"]>()
@@ -678,6 +679,397 @@ describe("Forge plans", () => {
     );
     expect(onSelectThread).toHaveBeenNthCalledWith(1, "ws-1", "thread-1");
     expect(onSelectThread).toHaveBeenNthCalledWith(2, "ws-1", "thread-2");
+  });
+
+  it("stops execution with an alert when next phase task id is not visible in the selected plan", async () => {
+    const startThread = vi
+      .fn<ForgePlansClient["startThread"]>()
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-999" } } });
+    const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
+    const getNextPhasePrompt = vi
+      .fn<ForgePlansClient["getNextPhasePrompt"]>()
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-999",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "unexpected task prompt",
+      })
+      .mockResolvedValueOnce(null);
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [
+            { id: "task-1", name: "Task 1", status: "pending" },
+            { id: "task-2", name: "Task 2", status: "pending" },
+          ],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt,
+      getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread,
+      sendUserMessage,
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+
+    await waitFor(() => expect(getNextPhasePrompt).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("unexpected task id"),
+    );
+    expect(startThread).not.toHaveBeenCalled();
+    expect(sendUserMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy();
+  });
+
+  it("stops without creating an extra thread when an unexpected task arrives after visible tasks", async () => {
+    const startThread = vi
+      .fn<ForgePlansClient["startThread"]>()
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-1" } } })
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-2" } } })
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-3" } } });
+    const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
+    const getNextPhasePrompt = vi
+      .fn<ForgePlansClient["getNextPhasePrompt"]>()
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 1 prompt",
+      })
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-2",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 2 prompt",
+      })
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-3",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "unexpected task prompt",
+      })
+      .mockResolvedValueOnce(null);
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [
+            { id: "task-1", name: "Task 1", status: "pending" },
+            { id: "task-2", name: "Task 2", status: "pending" },
+          ],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt,
+      getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread,
+      sendUserMessage,
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+
+    await waitFor(() => expect(startThread).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("unexpected task id"),
+    );
+    expect(sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(getNextPhasePrompt).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy();
+  });
+
+  it("exits cleanly after final visible task when next phase returns null", async () => {
+    const startThread = vi
+      .fn<ForgePlansClient["startThread"]>()
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-1" } } });
+    const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
+    const getNextPhasePrompt = vi
+      .fn<ForgePlansClient["getNextPhasePrompt"]>()
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 1 prompt",
+      })
+      .mockResolvedValueOnce(null);
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [{ id: "task-1", name: "Task 1", status: "pending" }],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt,
+      getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread,
+      sendUserMessage,
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+
+    await waitFor(() => expect(startThread).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(sendUserMessage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getNextPhasePrompt).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy();
+  });
+
+  it("preserves execution guard invariants across deterministic prompt sequences", async () => {
+    const knownTasks = ["task-1", "task-2", "task-3"] as const;
+    const knownTaskSet = new Set<string>(knownTasks);
+    let seed = 20260212;
+    const next = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed;
+    };
+
+    for (let caseIndex = 0; caseIndex < 8; caseIndex += 1) {
+      cleanup();
+
+      const sequenceLength = 2 + (next() % 4); // 2..5 prompts before terminal null
+      const unknownInsertionIndex = next() % (sequenceLength + 1); // if == length, no unknown
+      const taskSequence: string[] = [];
+      for (let i = 0; i < sequenceLength; i += 1) {
+        if (unknownInsertionIndex < sequenceLength && i === unknownInsertionIndex) {
+          taskSequence.push(`task-x-${caseIndex}`);
+          continue;
+        }
+        taskSequence.push(knownTasks[next() % knownTasks.length]);
+      }
+
+      const prompts: Array<
+        | {
+            planId: string;
+            taskId: string;
+            phaseId: string;
+            isLastPhase: boolean;
+            promptText: string;
+          }
+        | null
+      > = taskSequence.map((taskId, i) => ({
+          planId: "alpha",
+          taskId,
+          phaseId: `implementation-${i}`,
+          isLastPhase: true,
+          promptText: `${taskId} prompt ${i}`,
+        }));
+      prompts.push(null);
+
+      const getNextPhasePrompt = vi
+        .fn<ForgePlansClient["getNextPhasePrompt"]>()
+        .mockImplementation(async () => prompts.shift() ?? null);
+      let threadCounter = 0;
+      const startThread = vi
+        .fn<ForgePlansClient["startThread"]>()
+        .mockImplementation(async () => {
+          threadCounter += 1;
+          return {
+            result: {
+              thread: { id: `thread-${caseIndex}-${threadCounter}` },
+            },
+          };
+        });
+      const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
+
+      const plansClient: ForgePlansClient = {
+        listPlans: async () => [
+          {
+            id: "alpha",
+            title: "Alpha",
+            goal: "Alpha goal",
+            tasks: [
+              { id: "task-1", name: "Task 1", status: "pending" },
+              { id: "task-2", name: "Task 2", status: "pending" },
+              { id: "task-3", name: "Task 3", status: "pending" },
+            ],
+            currentTaskId: null,
+            planPath: "plans/alpha/plan.json",
+            updatedAtMs: 0,
+          },
+        ],
+        getPlanPrompt: async () => "",
+        prepareExecution: async () => {},
+        resetExecutionProgress: async () => {},
+        getNextPhasePrompt,
+        getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
+        runPhaseChecks: async () => ({ ok: true, results: [] }),
+        interruptTurn: async () => ({}),
+        connectWorkspace: async () => {},
+        startThread,
+        sendUserMessage,
+      };
+
+      render(
+        <Forge
+          activeWorkspaceId="ws-1"
+          templatesClient={templatesClient}
+          plansClient={plansClient}
+          collaborationModes={[]}
+        />,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+      fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+
+      const firstUnknown = taskSequence.findIndex((taskId) => !knownTaskSet.has(taskId));
+      const executedTaskSequence =
+        firstUnknown >= 0 ? taskSequence.slice(0, firstUnknown) : taskSequence;
+      const expectedThreadCount = new Set(executedTaskSequence).size;
+
+      await waitFor(() => expect(startThread).toHaveBeenCalledTimes(expectedThreadCount));
+      await waitFor(() =>
+        expect(sendUserMessage).toHaveBeenCalledTimes(executedTaskSequence.length),
+      );
+
+      if (firstUnknown >= 0) {
+        await waitFor(() =>
+          expect(screen.getByRole("alert").textContent).toContain("unexpected task id"),
+        );
+      } else {
+        await waitFor(() =>
+          expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy(),
+        );
+        expect(screen.queryByRole("alert")).toBeNull();
+      }
+    }
+  });
+
+  it("waits and re-polls after failing phase checks without starting a new session", async () => {
+    const startThread = vi
+      .fn<ForgePlansClient["startThread"]>()
+      .mockResolvedValueOnce({ result: { thread: { id: "thread-1" } } });
+    const sendUserMessage = vi.fn<ForgePlansClient["sendUserMessage"]>().mockResolvedValue({});
+    const getNextPhasePrompt = vi
+      .fn<ForgePlansClient["getNextPhasePrompt"]>()
+      .mockResolvedValueOnce({
+        planId: "alpha",
+        taskId: "task-1",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 1 prompt",
+      })
+      .mockResolvedValueOnce(null);
+    const runPhaseChecks = vi
+      .fn<ForgePlansClient["runPhaseChecks"]>()
+      .mockResolvedValueOnce({ ok: false, results: [] });
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [{ id: "task-1", name: "Task 1", status: "pending" }],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt,
+      getPhaseStatus: async () => ({ status: "completed", commitSha: null }),
+      runPhaseChecks,
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread,
+      sendUserMessage,
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+
+    await waitFor(() => expect(runPhaseChecks).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => window.setTimeout(resolve, 1300));
+    await waitFor(() => expect(getNextPhasePrompt).toHaveBeenCalledTimes(2));
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy();
   });
 
   it("pauses by interrupting the active forge turn", async () => {
@@ -1237,7 +1629,10 @@ describe("Forge plans", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
-    expect(await screen.findByRole("button", { name: "Pause plan" })).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("unexpected task id"),
+    );
+    expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy();
 
     const staleRow = screen.getByText("Task 1").closest("li") as HTMLLIElement | null;
     const secondRow = screen.getByText("Task 2").closest("li") as HTMLLIElement | null;
@@ -1247,8 +1642,6 @@ describe("Forge plans", () => {
     expect(staleRow?.className.includes("inProgress")).toBe(false);
     expect(secondRow?.className.includes("inProgress")).toBe(false);
     expect(document.querySelectorAll(".forge-running-icon.spinning")).toHaveLength(0);
-
-    fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
   });
 
   it("renders ordered phase chips with status classes and keeps failed ai-review blocking", async () => {

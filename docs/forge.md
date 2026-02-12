@@ -76,6 +76,12 @@ Execution UI rendering behavior:
   - demote to `completed` if all phases for that task are `completed`
   - otherwise demote to `pending`
 - If `runningInfo.taskId` does not match any visible plan task row, no row renders a running spinner.
+- `src/features/forge/hooks/useForgeExecution.ts` enforces selected-plan task-id execution guards:
+  - `Forge.tsx` passes `knownTaskIds` from `selectedPlan.items[*].id` into `useForgeExecution`.
+  - Every `forge_get_next_phase_prompt` task id is validated before `startThread`.
+  - If task id is unknown to the selected plan, execution stops with `lastError`/alert and does not start a thread for that task.
+  - Overflow guard: once all visible task ids have been seen in the run, a new task id cannot start a new session/thread.
+  - If backend returns `null` after final visible task, execution exits cleanly with no extra session/thread.
 - Forge sidebar panel project gate (`src/features/forge/components/Forge.tsx` + `src/features/app/components/Sidebar.tsx`):
   - Forge panel can be opened from the sidebar header even when no workspace is active.
   - If `activeWorkspaceId` is null/blank, Forge renders blocker copy `Select a project first to use Forge.`.
@@ -175,7 +181,7 @@ Current regression coverage for this behavior spans frontend, template hooks, an
   - Covers no-project blocker copy, disabled Forge controls, blocked menu reachability, no backend calls in blocked mode, and unchanged sidebar Forge open/close toggling.
 - Frontend execution chip rendering:
   - `src/features/forge/components/Forge.plans.test.tsx`
-  - Covers template-order chip rendering, class-state mapping, deterministic single-running-row behavior, stale non-active `in_progress` demotion (`pending` vs `completed`), non-visible running-task guard, icon URL fallback, and terminal `ai-review` staying non-completed/visibly blocking.
+  - Covers template-order chip rendering, class-state mapping, deterministic single-running-row behavior, stale non-active `in_progress` demotion (`pending` vs `completed`), non-visible running-task guard, selected-plan unknown-task stop behavior, overflow no-extra-thread guard, deterministic seeded prompt-sequence guard invariants, failed-check re-poll without extra session creation, icon URL fallback, and terminal `ai-review` staying non-completed/visibly blocking.
 - Frontend icon resolver:
   - `src/utils/forgePhaseIcons.test.ts`
   - Covers valid icon URL resolution, invalid-id fallback to `file`, and whitespace-trimmed valid ids.
@@ -192,7 +198,7 @@ Current regression coverage for this behavior spans frontend, template hooks, an
 Task-local validation commands for Forge panel/runtime behavior:
 
 - `npm run test -- src/features/forge/components/Forge.plans.test.tsx src/features/app/components/Sidebar.test.tsx`
-- `npm run test -- --coverage --coverage.include=src/features/forge/components/Forge.tsx src/features/forge/components/Forge.plans.test.tsx`
+- `npm run test -- --coverage --coverage.include=src/features/forge/hooks/useForgeExecution.ts --coverage.include=src/features/forge/components/Forge.tsx src/features/forge/components/Forge.plans.test.tsx`
 - `npm run typecheck`
 
 ## Workspace Artifacts Created by Install
