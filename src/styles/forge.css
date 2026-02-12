@@ -306,6 +306,12 @@
   flex-shrink: 0;
 }
 
+.forge-phase-icon img {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .forge-phase-name {
   font-size: 12px;
 }

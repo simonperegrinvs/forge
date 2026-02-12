@@ -17,10 +17,13 @@ import { useDismissibleMenu } from "../../app/hooks/useDismissibleMenu";
 import {
   forgeGetInstalledTemplate,
   forgeInstallTemplate,
+  forgeLoadPhaseView,
   forgeListBundledTemplates,
   forgeUninstallTemplate,
   type ForgeBundledTemplateInfo,
   type ForgeNextPhasePrompt,
+  type ForgePhaseViewStatus,
+  type ForgePhaseView,
   type ForgePhaseStatus,
   type ForgeRunPhaseChecksResponse,
   type ForgeTemplateLock,
@@ -40,6 +43,7 @@ import {
   startThread,
 } from "../../../services/tauri";
 import { useForgeExecution } from "../hooks/useForgeExecution";
+import { getForgePhaseIconUrl } from "../../../utils/forgePhaseIcons";
 
 export type ForgeTemplatesClient = {
   listBundledTemplates: () => Promise<ForgeBundledTemplateInfo[]>;
@@ -50,6 +54,11 @@ export type ForgeTemplatesClient = {
 
 export type ForgePlansClient = {
   listPlans: (workspaceId: string) => Promise<ForgeWorkspacePlan[]>;
+  loadPhaseView?: (
+    workspaceId: string,
+    planId: string,
+    installedTemplateId: string | null,
+  ) => Promise<ForgePhaseView>;
   getPlanPrompt: (workspaceId: string) => Promise<string>;
   prepareExecution: (workspaceId: string, planId: string) => Promise<void>;
   resetExecutionProgress: (workspaceId: string, planId: string) => Promise<void>;
@@ -95,6 +104,7 @@ const defaultForgeTemplatesClient: ForgeTemplatesClient = {
 
 const defaultForgePlansClient: ForgePlansClient = {
   listPlans: forgeListPlans,
+  loadPhaseView: forgeLoadPhaseView,
   getPlanPrompt: forgeGetPlanPrompt,
   prepareExecution: forgePrepareExecution,
   resetExecutionProgress: forgeResetExecutionProgress,
@@ -120,6 +130,14 @@ type ForgePlan = {
   name: string;
   items: ForgePlanItem[];
 };
+
+const EMPTY_PHASE_VIEW: ForgePhaseView = {
+  phases: [],
+  taskPhaseStatusByTaskId: {},
+};
+
+type ForgePhaseChipState = "is-complete" | "is-current" | "is-pending";
+type ForgeRunningInfo = { taskId: string; phaseId: string } | null;
 
 function formatPlanLabel(plan: ForgeWorkspacePlan): string {
   const title = plan.title?.trim() ?? "";
@@ -148,6 +166,89 @@ function mapForgeItemStatus(status: string): ForgeItemStatus {
     return "inProgress";
   }
   return "pending";
+}
+
+function mapForgePhaseChipState(
+  taskId: string,
+  phaseId: string,
+  phaseStatus: ForgePhaseViewStatus,
+  runningInfo: ForgeRunningInfo,
+): ForgePhaseChipState {
+  const normalizedStatus = phaseStatus.trim().toLowerCase();
+  if (runningInfo?.taskId === taskId && runningInfo.phaseId === phaseId) {
+    return "is-current";
+  }
+  if (normalizedStatus === "in_progress") {
+    return "is-current";
+  }
+  if (normalizedStatus === "completed") {
+    return "is-complete";
+  }
+  return "is-pending";
+}
+
+function allTaskPhasesCompleted(
+  taskPhaseStatuses: Record<string, ForgePhaseViewStatus>,
+  phases: ForgePhaseView["phases"],
+): boolean {
+  if (phases.length > 0) {
+    return phases.every(
+      (phase) =>
+        (taskPhaseStatuses[phase.id] ?? "pending").trim().toLowerCase() ===
+        "completed",
+    );
+  }
+  const phaseStatuses = Object.values(taskPhaseStatuses);
+  return (
+    phaseStatuses.length > 0 &&
+    phaseStatuses.every((status) => status.trim().toLowerCase() === "completed")
+  );
+}
+
+function deriveStatusFromTaskPhases(
+  taskPhaseStatuses: Record<string, ForgePhaseViewStatus>,
+  phases: ForgePhaseView["phases"],
+): ForgeItemStatus | null {
+  const phaseStatuses = Object.values(taskPhaseStatuses);
+  if (phaseStatuses.length === 0) {
+    return null;
+  }
+  if (allTaskPhasesCompleted(taskPhaseStatuses, phases)) {
+    return "completed";
+  }
+  if (phaseStatuses.some((status) => status.trim().toLowerCase() === "in_progress")) {
+    return "inProgress";
+  }
+  return "pending";
+}
+
+function resolveForgeTaskRowStatus({
+  taskId,
+  planTaskStatus,
+  taskPhaseStatuses,
+  phases,
+  runningInfo,
+}: {
+  taskId: string;
+  planTaskStatus: ForgeItemStatus;
+  taskPhaseStatuses: Record<string, ForgePhaseViewStatus>;
+  phases: ForgePhaseView["phases"];
+  runningInfo: ForgeRunningInfo;
+}): ForgeItemStatus {
+  if (runningInfo?.taskId === taskId) {
+    return "inProgress";
+  }
+
+  const phaseDerivedStatus = deriveStatusFromTaskPhases(taskPhaseStatuses, phases);
+  const resolvedStatus = phaseDerivedStatus ?? planTaskStatus;
+
+  if (runningInfo && resolvedStatus === "inProgress") {
+    return allTaskPhasesCompleted(taskPhaseStatuses, phases)
+      ? "completed"
+      : "pending";
+  }
+
+  return resolvedStatus;
 }
 
 function ForgeTemplatesModal({
@@ -304,6 +405,7 @@ export function Forge({
   const installTemplate = client.installTemplate;
   const uninstallTemplate = client.uninstallTemplate;
   const listPlans = plansApi.listPlans;
+  const loadPhaseView = plansApi.loadPhaseView ?? forgeLoadPhaseView;
   const getPlanPrompt = plansApi.getPlanPrompt;
   const prepareExecution = plansApi.prepareExecution;
   const resetExecutionProgress = plansApi.resetExecutionProgress;
@@ -314,6 +416,7 @@ export function Forge({
   const connectWorkspaceToRun = plansApi.connectWorkspace;
   const startThreadForPlan = plansApi.startThread;
   const sendUserMessageToPlanThread = plansApi.sendUserMessage;
+  const hasActiveWorkspace = Boolean(activeWorkspaceId?.trim());
 
   const findCollaborationMode = useCallback(
     (wanted: string) => {
@@ -502,6 +605,7 @@ export function Forge({
   const selectedPlan = selectedPlanId
     ? plans.find((p) => p.id === selectedPlanId) ?? null
     : null;
+  const [phaseView, setPhaseView] = useState<ForgePhaseView>(EMPTY_PHASE_VIEW);
 
   const [planMenuOpen, setPlanMenuOpen] = useState(false);
   const planMenuRef = useRef<HTMLDivElement | null>(null);
@@ -515,6 +619,13 @@ export function Forge({
   });
 
   useEffect(() => {
+    if (hasActiveWorkspace) {
+      return;
+    }
+    setPlanMenuOpen(false);
+  }, [hasActiveWorkspace]);
+
+  useEffect(() => {
     if (!selectedPlanId) {
       return;
     }
@@ -522,6 +633,49 @@ export function Forge({
       setSelectedPlanId(null);
     }
   }, [plans, selectedPlanId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeWorkspaceId || !selectedPlanId) {
+      setPhaseView(EMPTY_PHASE_VIEW);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const installedTemplateId = installedTemplate?.installedTemplateId ?? null;
+    const refreshPhaseView = async () => {
+      try {
+        const next = await loadPhaseView(
+          activeWorkspaceId,
+          selectedPlanId,
+          installedTemplateId,
+        );
+        if (cancelled) {
+          return;
+        }
+        setPhaseView(next);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.warn("Failed to load Forge phase view.", { error });
+        setPhaseView(EMPTY_PHASE_VIEW);
+      }
+    };
+
+    void refreshPhaseView();
+    const interval = window.setInterval(refreshPhaseView, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [
+    activeWorkspaceId,
+    installedTemplate?.installedTemplateId,
+    loadPhaseView,
+    selectedPlanId,
+  ]);
 
   const executionMode = useMemo(() => {
     const mode =
@@ -531,6 +685,10 @@ export function Forge({
       null;
     return buildCollaborationModePayloadFor(mode);
   }, [buildCollaborationModePayloadFor, collaborationModes, findCollaborationMode]);
+  const selectedPlanTaskIds = useMemo(
+    () => selectedPlan?.items.map((item) => item.id) ?? null,
+    [selectedPlan],
+  );
 
   const {
     isExecuting,
@@ -540,6 +698,7 @@ export function Forge({
     pauseExecution,
   } = useForgeExecution({
     workspaceId: activeWorkspaceId,
+    knownTaskIds: selectedPlanTaskIds,
     connectWorkspace: connectWorkspaceToRun,
     prepareExecution,
     getNextPhasePrompt,
@@ -674,6 +833,7 @@ export function Forge({
             title="Templates"
             data-tauri-drag-region="false"
             onClick={() => setTemplatesOpen(true)}
+            disabled={!hasActiveWorkspace}
           >
             <LayoutTemplate aria-hidden />
           </button>
@@ -681,9 +841,15 @@ export function Forge({
             type="button"
             className={`ghost forge-plan-toggle${planMenuOpen ? " is-open" : ""}`}
             data-tauri-drag-region="false"
-            onClick={() => setPlanMenuOpen((open) => !open)}
+            onClick={() => {
+              if (!hasActiveWorkspace) {
+                return;
+              }
+              setPlanMenuOpen((open) => !open);
+            }}
             aria-haspopup="menu"
             aria-expanded={planMenuOpen}
+            disabled={!hasActiveWorkspace}
           >
             <span className={selectedPlan ? "forge-plan-name" : "forge-plan-empty"}>
               {selectedPlan ? selectedPlan.name : "Click to select"}
@@ -746,18 +912,20 @@ export function Forge({
               type="button"
               className="ghost forge-execute-toggle"
               data-tauri-drag-region="false"
-              disabled={!selectedPlan}
+              disabled={!hasActiveWorkspace || !selectedPlan}
               aria-label={isExecuting ? "Pause plan" : "Resume plan"}
               aria-pressed={isExecuting}
               title={
-                !selectedPlan
+                !hasActiveWorkspace
+                  ? "Select a project to use Forge"
+                  : !selectedPlan
                   ? "Select a plan to run"
                   : isExecuting
                     ? "Pause plan"
                     : "Resume plan"
               }
               onClick={() => {
-                if (!selectedPlan) {
+                if (!hasActiveWorkspace || !selectedPlan) {
                   return;
                 }
                 if (isExecuting) {
@@ -773,10 +941,12 @@ export function Forge({
               type="button"
               className="ghost forge-reset-progress"
               data-tauri-drag-region="false"
-              disabled={!selectedPlan || isResettingProgress}
+              disabled={!hasActiveWorkspace || !selectedPlan || isResettingProgress}
               aria-label="Clean progress"
               title={
-                !selectedPlan
+                !hasActiveWorkspace
+                  ? "Select a project to use Forge"
+                  : !selectedPlan
                   ? "Select a plan to clean progress"
                   : "Reset state and derived execution files"
               }
@@ -794,13 +964,22 @@ export function Forge({
               {lastError}
             </div>
           ) : null}
-          {selectedPlan ? (
+          {!hasActiveWorkspace ? (
+            <div className="forge-empty">
+              Select a project first to use Forge.
+            </div>
+          ) : selectedPlan ? (
             <ol className="forge-items">
               {selectedPlan.items.map((item, index) => {
                 const isActiveTask = runningInfo?.taskId === item.id;
-                const effectiveStatus: ForgeItemStatus = isActiveTask
-                  ? "inProgress"
-                  : item.status;
+                const taskPhaseStatuses = phaseView.taskPhaseStatusByTaskId[item.id] ?? {};
+                const effectiveStatus = resolveForgeTaskRowStatus({
+                  taskId: item.id,
+                  planTaskStatus: item.status,
+                  taskPhaseStatuses,
+                  phases: phaseView.phases,
+                  runningInfo,
+                });
                 const isCompleted = effectiveStatus === "completed";
                 const isRunning = effectiveStatus === "inProgress";
                 const isActivePhase = isActiveTask && runningInfo?.phaseId;
@@ -824,6 +1003,31 @@ export function Forge({
                         </span>
                       ) : null}
                     </div>
+                    {phaseView.phases.length > 0 ? (
+                      <div className="forge-phases">
+                        {phaseView.phases.map((phase) => {
+                          const chipState = mapForgePhaseChipState(
+                            item.id,
+                            phase.id,
+                            taskPhaseStatuses[phase.id] ?? "pending",
+                            runningInfo,
+                          );
+                          const iconUrl = getForgePhaseIconUrl(phase.iconId);
+                          return (
+                            <span
+                              key={`${item.id}-${phase.id}`}
+                              className={`forge-phase ${chipState}`}
+                              data-phase-id={phase.id}
+                            >
+                              <span className="forge-phase-icon" aria-hidden>
+                                <img src={iconUrl} alt="" aria-hidden />
+                              </span>
+                              <span className="forge-phase-name">{phase.title}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}

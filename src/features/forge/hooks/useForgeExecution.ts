@@ -15,6 +15,7 @@ type ForgeExecutionStatusLike =
 
 type ForgeExecutionArgs = {
   workspaceId: string | null;
+  knownTaskIds?: string[] | null;
   connectWorkspace: (workspaceId: string) => Promise<void>;
   prepareExecution: (workspaceId: string, planId: string) => Promise<void>;
   getNextPhasePrompt: (
@@ -151,6 +152,7 @@ function wait(ms: number): Promise<void> {
 
 export function useForgeExecution({
   workspaceId,
+  knownTaskIds = null,
   connectWorkspace,
   prepareExecution,
   getNextPhasePrompt,
@@ -172,6 +174,19 @@ export function useForgeExecution({
     threadId: string;
     turnId: string;
   } | null>(null);
+  const normalizedKnownTaskIds = useMemo(() => {
+    if (!knownTaskIds) {
+      return null;
+    }
+    const next = new Set<string>();
+    for (const taskId of knownTaskIds) {
+      const trimmed = taskId.trim();
+      if (trimmed) {
+        next.add(trimmed);
+      }
+    }
+    return next;
+  }, [knownTaskIds]);
 
   const clearExecutionState = useCallback(() => {
     setIsExecuting(false);
@@ -261,6 +276,9 @@ export function useForgeExecution({
         let activeThreadId: string | null = null;
         let activeThreadTaskId: string | null = null;
         const threadByTaskId = new Map<string, string>();
+        const pendingKnownTaskIds = normalizedKnownTaskIds
+          ? new Set(normalizedKnownTaskIds)
+          : null;
 
         while (isActive()) {
           const phase = await getNextPhasePrompt(workspace, normalizedPlanId);
@@ -279,7 +297,25 @@ export function useForgeExecution({
             throw new Error("Forge next phase prompt returned an empty phase id.");
           }
 
+          if (normalizedKnownTaskIds && !normalizedKnownTaskIds.has(taskId)) {
+            throw new Error(
+              `Forge execution received unexpected task id "${taskId}" not present in the selected plan.`,
+            );
+          }
+
           const mappedThreadId = threadByTaskId.get(taskId) ?? null;
+          if (
+            !mappedThreadId &&
+            normalizedKnownTaskIds &&
+            normalizedKnownTaskIds.size > 0 &&
+            pendingKnownTaskIds &&
+            pendingKnownTaskIds.size === 0
+          ) {
+            throw new Error(
+              `Forge execution received unexpected task id "${taskId}" after exhausting visible plan tasks.`,
+            );
+          }
+          pendingKnownTaskIds?.delete(taskId);
           if (!mappedThreadId) {
             const previousTaskId = activeThreadTaskId;
             const previousThreadId = activeThreadId;
@@ -402,6 +438,7 @@ export function useForgeExecution({
       runPhaseChecks,
       sendUserMessage,
       startThread,
+      normalizedKnownTaskIds,
       workspaceId,
     ],
   );

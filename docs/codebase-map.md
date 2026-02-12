@@ -21,6 +21,7 @@ If a behavior must work in both app and daemon, implement it in `src-tauri/src/s
 | Need | Primary files to edit |
 | --- | --- |
 | App-level UI composition/layout wiring | `src/App.tsx`, `src/features/app/components/AppLayout.tsx`, `src/features/app/bootstrap/*`, `src/features/app/orchestration/*`, `src/features/app/hooks/*` |
+| Change Forge sidebar panel behavior (project gate, task-row running status, plan actions, execution controls, selected-plan task-id execution guards) | `src/features/forge/components/Forge.tsx`, `src/features/app/components/Sidebar.tsx`, `src/features/forge/hooks/useForgeExecution.ts`, `src/features/forge/components/Forge.plans.test.tsx`, `src/features/app/components/Sidebar.test.tsx`, `docs/forge.md` |
 | Add/change Tauri IPC methods used by frontend | `src/services/tauri.ts`, `src-tauri/src/lib.rs`, matching backend adapter module |
 | Add/change app-server event handling in UI | `src/services/events.ts`, `src/features/app/hooks/useAppServerEvents.ts`, `src/utils/appServerEvents.ts`, `src/features/threads/utils/threadNormalize.ts` |
 | Change thread state transitions | `src/features/threads/hooks/useThreadsReducer.ts`, `src/features/threads/hooks/threadReducer/*`, `src/features/threads/hooks/useThreads.ts`, focused thread hooks under `src/features/threads/hooks/*` |
@@ -83,6 +84,13 @@ Use TS/Vite aliases for refactor-safe imports:
 ### Prompts
 
 - Prompt UI and workflow: `src/features/prompts/components/PromptPanel.tsx`, `src/features/prompts/hooks/useCustomPrompts.ts`
+
+### Forge
+
+- Forge panel UI and controls: `src/features/forge/components/Forge.tsx`
+- Forge execution loop wiring: `src/features/forge/hooks/useForgeExecution.ts`
+- Sidebar Forge panel toggle wiring: `src/features/app/components/Sidebar.tsx`
+- Forge behavior tests: `src/features/forge/components/Forge.plans.test.tsx`, `src/features/app/components/Sidebar.test.tsx`
 
 ## Backend App (Tauri) Navigation
 
