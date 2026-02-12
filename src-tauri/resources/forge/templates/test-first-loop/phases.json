@@ -2,12 +2,57 @@
   "schema": "forge-phases-v1",
   "phases": [
     {
+      "id": "test-case-mapping",
+      "title": "Test Case Mapping",
+      "iconId": "taskfile",
+      "order": 1,
+      "goal": "Translate requirements into a concrete, risk-prioritized test map before writing implementation code.",
+      "description": "Create an explicit test inventory that maps each acceptance criterion and risk to planned automated coverage. Completion checks: (1) every requirement is mapped to at least one planned test, (2) edge cases and failure paths are called out, (3) high-risk behaviors are prioritized first, and (4) assumptions and unresolved questions are documented.",
+      "checks": []
+    },
+    {
+      "id": "behavioral-tests",
+      "title": "Behavioral Tests",
+      "iconId": "cucumber",
+      "order": 2,
+      "goal": "Implement behavioral tests that codify intended external behavior before core implementation changes.",
+      "description": "Add or update behavior-focused tests (for example integration/BDD/contract style) that fail for the right reasons before implementation and pass only when behavior is correct. Completion checks: (1) new behavior is covered by executable tests, (2) tests fail before implementation changes and pass afterward, (3) assertions verify outcomes rather than internals, and (4) flaky or nondeterministic cases are removed or stabilized.",
+      "checks": []
+    },
+    {
       "id": "implementation",
       "title": "Implementation",
-      "iconId": "code_blocks",
-      "order": 1,
-      "goal": "Implement the task changes and record progress in state.json.",
-      "description": "Complete the task in one commit. If checks fail after committing, fix issues and amend the same commit until checks pass.",
+      "iconId": "console",
+      "order": 3,
+      "goal": "Implement the minimum production changes needed to satisfy mapped requirements and behavioral tests.",
+      "description": "Apply focused code changes that satisfy tests without broad refactors unless required for correctness. Completion checks: (1) all phase-targeted tests pass locally, (2) changes are limited to necessary scope, (3) state/progress notes capture key decisions, and (4) no known regressions are introduced.",
+      "checks": []
+    },
+    {
+      "id": "coverage-hardening",
+      "title": "Coverage Hardening",
+      "iconId": "codecov",
+      "order": 4,
+      "goal": "Raise confidence by hardening regression coverage and closing high-risk testing gaps.",
+      "description": "Expand regression tests and quality checks until coverage and risk goals are met. Completion checks: (1) measured coverage is at least 80%, (2) uncovered high-risk behaviors are identified explicitly, (3) property-based tests are added for remaining high-risk gaps, and (4) resulting test evidence is documented in task notes.",
+      "checks": []
+    },
+    {
+      "id": "documentation",
+      "title": "Documentation",
+      "iconId": "readme",
+      "order": 5,
+      "goal": "Update operator-facing and developer-facing documentation to reflect the delivered behavior.",
+      "description": "Revise docs, runbooks, and inline guidance so future work uses current live behavior. Completion checks: (1) changed behavior is documented in canonical docs, (2) setup/run/validation instructions are current, (3) removed or obsolete guidance is deleted, and (4) documentation paths are referenced in notes.",
+      "checks": []
+    },
+    {
+      "id": "ai-review",
+      "title": "AI Review Gate",
+      "iconId": "folder-review",
+      "order": 6,
+      "goal": "Run an AI quality review pass and enforce a strict zero-findings completion gate.",
+      "description": "Execute an AI review over the final change set and treat any finding as a release blocker for this phase. Completion checks: (1) AI review is run against the final diff, (2) all findings are resolved and rechecked, and (3) the phase is marked completed only with zero findings. If any finding remains, phase status must stay non-completed (`failed` or `blocked`) and execution must stop until fixes are applied and the review is rerun clean.",
       "checks": []
     }
   ]
