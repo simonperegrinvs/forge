@@ -84,6 +84,7 @@ Execution UI rendering behavior:
   - If backend returns `null` after final visible task, execution exits cleanly with no extra session/thread.
 - Forge sidebar panel project gate (`src/features/forge/components/Forge.tsx` + `src/features/app/components/Sidebar.tsx`):
   - Forge panel can be opened from the sidebar header even when no workspace is active.
+  - Forge actions require an explicitly selected project (`activeWorkspaceId` non-empty); opening the panel alone is not enough to run Forge operations.
   - If `activeWorkspaceId` is null/blank, Forge renders blocker copy `Select a project first to use Forge.`.
   - In no-project mode, these controls are disabled and blocked from backend side effects: `Open templates`, plan selector, `Resume plan`, and `Clean progress`.
   - Plan menu actions (`New plan...`, `Other...`) are not reachable while blocked, and no-project control clicks do not call `connectWorkspace`, `startThread`, or `sendUserMessage`.
