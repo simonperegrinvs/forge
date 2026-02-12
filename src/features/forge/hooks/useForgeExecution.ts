@@ -50,6 +50,11 @@ type ForgeExecutionArgs = {
   ) => Promise<unknown>;
   onSelectThread?: (workspaceId: string, threadId: string) => void;
   collaborationMode?: Record<string, unknown> | null;
+  executionLimits?: {
+    phaseStatusPollIntervalMs?: number;
+    phaseStatusTimeoutMs?: number;
+    maxPhaseCheckFailures?: number;
+  };
 };
 
 type ForgeRunningInfo = {
@@ -66,6 +71,15 @@ type ForgeExecutionState = {
 };
 
 const POLL_INTERVAL_MS = 1200;
+const PHASE_STATUS_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_PHASE_CHECK_FAILURES = 3;
+
+function resolvePositiveNumber(value: number | undefined, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return value;
+}
 
 function isFinalPhaseStatus(status: ForgeExecutionStatusLike): boolean {
   const normalized = status.trim().toLowerCase();
@@ -163,6 +177,7 @@ export function useForgeExecution({
   sendUserMessage,
   onSelectThread,
   collaborationMode = null,
+  executionLimits,
 }: ForgeExecutionArgs): ForgeExecutionState {
   const [isExecuting, setIsExecuting] = useState(false);
   const [runningInfo, setRunningInfo] = useState<ForgeRunningInfo | null>(null);
@@ -187,6 +202,23 @@ export function useForgeExecution({
     }
     return next;
   }, [knownTaskIds]);
+  const phaseStatusPollIntervalMs = resolvePositiveNumber(
+    executionLimits?.phaseStatusPollIntervalMs,
+    POLL_INTERVAL_MS,
+  );
+  const phaseStatusTimeoutMs = resolvePositiveNumber(
+    executionLimits?.phaseStatusTimeoutMs,
+    PHASE_STATUS_TIMEOUT_MS,
+  );
+  const maxPhaseCheckFailures = Math.max(
+    1,
+    Math.floor(
+      resolvePositiveNumber(
+        executionLimits?.maxPhaseCheckFailures,
+        MAX_PHASE_CHECK_FAILURES,
+      ),
+    ),
+  );
 
   const clearExecutionState = useCallback(() => {
     setIsExecuting(false);
@@ -244,7 +276,15 @@ export function useForgeExecution({
         taskId: string,
         phaseId: string,
       ): Promise<ForgeExecutionStatusLike | null> => {
+        const startedAt = Date.now();
         while (isActive()) {
+          if (Date.now() - startedAt >= phaseStatusTimeoutMs) {
+            throw new Error(
+              `Phase ${taskId}/${phaseId} timed out waiting for terminal status after ${Math.ceil(
+                phaseStatusTimeoutMs / 1000,
+              )}s.`,
+            );
+          }
           const phaseStatus = await getPhaseStatus(
             workspace,
             normalizedPlanId,
@@ -257,7 +297,7 @@ export function useForgeExecution({
           if (isFinalPhaseStatus(phaseStatus.status)) {
             return phaseStatus.status;
           }
-          await wait(POLL_INTERVAL_MS);
+          await wait(phaseStatusPollIntervalMs);
         }
         return null;
       };
@@ -276,6 +316,7 @@ export function useForgeExecution({
         let activeThreadId: string | null = null;
         let activeThreadTaskId: string | null = null;
         const threadByTaskId = new Map<string, string>();
+        const checkFailuresByTaskPhase = new Map<string, number>();
         const pendingKnownTaskIds = normalizedKnownTaskIds
           ? new Set(normalizedKnownTaskIds)
           : null;
@@ -406,9 +447,18 @@ export function useForgeExecution({
             phaseId,
           );
           if (!checks.ok) {
-            await wait(POLL_INTERVAL_MS);
+            const failureKey = `${taskId}:${phaseId}`;
+            const failures = (checkFailuresByTaskPhase.get(failureKey) ?? 0) + 1;
+            checkFailuresByTaskPhase.set(failureKey, failures);
+            if (failures >= maxPhaseCheckFailures) {
+              throw new Error(
+                `Phase ${taskId}/${phaseId} reached max check failures (${maxPhaseCheckFailures}).`,
+              );
+            }
+            await wait(phaseStatusPollIntervalMs);
             continue;
           }
+          checkFailuresByTaskPhase.delete(`${taskId}:${phaseId}`);
         }
       } catch (error) {
         const message =
@@ -439,6 +489,9 @@ export function useForgeExecution({
       sendUserMessage,
       startThread,
       normalizedKnownTaskIds,
+      phaseStatusPollIntervalMs,
+      phaseStatusTimeoutMs,
+      maxPhaseCheckFailures,
       workspaceId,
     ],
   );
