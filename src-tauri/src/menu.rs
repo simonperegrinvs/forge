@@ -62,7 +62,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     handle: &tauri::AppHandle<R>,
 ) -> tauri::Result<Menu<R>> {
     let registry = handle.state::<MenuItemRegistry<R>>();
-    let app_name = handle.package_info().name.clone();
+    let app_name = "Forge".to_string();
     let about_item =
         MenuItemBuilder::with_id("about", format!("About {app_name}")).build(handle)?;
     let check_updates_item =
@@ -329,7 +329,7 @@ pub(crate) fn handle_menu_event<R: tauri::Runtime>(
                 return;
             }
             let _ = WebviewWindowBuilder::new(app, "about", WebviewUrl::App("index.html".into()))
-                .title("About Codex Monitor")
+                .title("About Forge")
                 .resizable(false)
                 .inner_size(360.0, 240.0)
                 .center()

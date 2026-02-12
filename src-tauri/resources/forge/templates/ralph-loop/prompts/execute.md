@@ -5,7 +5,7 @@ between tasks - everything you need is below.
 
 ## Runtime contract (read first)
 
-`Forge` is the CodexMonitor backend orchestrator driving this loop.
+`Forge` is the Forge backend orchestrator driving this loop.
 
 - Forge selects the current task/phase from `plans/{{plan_id}}/state.json`.
 - Forge starts fresh task-scoped threads, runs backend checks, and manages final task commits.

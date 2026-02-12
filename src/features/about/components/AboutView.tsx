@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-const GITHUB_URL = "https://github.com/Dimillian/CodexMonitor";
+const GITHUB_URL = "https://github.com/simonperegrinvs/forge";
 const TWITTER_URL = "https://x.com/dimillian";
 
 export function AboutView() {
@@ -43,10 +43,10 @@ export function AboutView() {
         <div className="about-header">
           <img
             className="about-icon"
-            src="/app-icon.png"
-            alt="Codex Monitor icon"
+            src="/forge.svg"
+            alt="Forge icon"
           />
-          <div className="about-title">Codex Monitor</div>
+          <div className="about-title">Forge</div>
         </div>
         <div className="about-version">
           {version ? `Version ${version}` : "Version —"}

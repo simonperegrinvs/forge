@@ -43,7 +43,7 @@ fn build_initialize_params(client_version: &str) -> Value {
     json!({
         "clientInfo": {
             "name": "codex_monitor",
-            "title": "Codex Monitor",
+            "title": "Forge",
             "version": client_version
         },
         "capabilities": {
