@@ -75,6 +75,17 @@ If any completion check is unmet, do not mark the phase `completed`; use `in_pro
    - Forge finalizes phase/task completion statuses after checks.
    - If checks fail, Forge reopens the phase and you retry.
    - If checks pass on the last phase, Forge creates the task commit and records `commit_sha`.
+   - For `ai-review`, Forge requires a report file at `plans/{{plan_id}}/ai-review/{{current_task_id}}.json` with:
+
+```json
+{
+  "schema": "forge-ai-review-v1",
+  "taskId": "{{current_task_id}}",
+  "findings": []
+}
+```
+
+   - If any finding remains, include each finding in `findings` and keep phase status non-completed (`blocked` or `failed`).
 5. Do NOT run `git` commands yourself in execute mode.
    - Do NOT run `git add`, `git commit`, `git commit --amend`, or `git push`.
    - Do NOT set `commit_sha` in `state.json`; Forge manages it.

@@ -52,7 +52,7 @@
       "iconId": "folder-review",
       "order": 6,
       "goal": "Run an AI quality review pass and enforce a strict zero-findings completion gate.",
-      "description": "Execute an AI review over the final change set and treat any finding as a release blocker for this phase. Completion checks: (1) AI review is run against the final diff, (2) all findings are resolved and rechecked, and (3) the phase is marked completed only with zero findings. If any finding remains, phase status must stay non-completed (`failed` or `blocked`) and execution must stop until fixes are applied and the review is rerun clean.",
+      "description": "Execute an AI review over the final change set and treat any finding as a release blocker for this phase. Completion checks: (1) AI review is run against the final diff, (2) all findings are resolved and rechecked, (3) `plans/<plan_id>/ai-review/<task_id>.json` is written with schema `forge-ai-review-v1`, matching `taskId`, and `findings: []`, and (4) the phase is marked completed only with zero findings. If any finding remains, phase status must stay non-completed (`failed` or `blocked`) and execution must stop until fixes are applied and the review is rerun clean.",
       "checks": []
     }
   ]
