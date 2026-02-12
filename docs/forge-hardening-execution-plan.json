@@ -1,0 +1,148 @@
+{
+  "$schema": "plan-v1",
+  "id": "forge-hardening-execution",
+  "title": "Forge Hardening Execution",
+  "goal": "Implement Forge architecture, template, and quality improvements with test-first, task-scoped commits and a PR.",
+  "context": {
+    "tech_stack": [
+      "TypeScript",
+      "React",
+      "Vitest",
+      "Rust",
+      "Tauri"
+    ],
+    "constraints": [
+      "Tests first for each task",
+      "One commit per task",
+      "Keep app/daemon behavior parity",
+      "Do not break existing Forge contracts"
+    ],
+    "references": [
+      {
+        "path": "src/features/forge/components/Forge.tsx",
+        "description": "Forge UI orchestration and polling"
+      },
+      {
+        "path": "src/features/forge/hooks/useForgeExecution.ts",
+        "description": "Execution loop and phase orchestration"
+      },
+      {
+        "path": "src-tauri/src/shared/forge_execute_core.rs",
+        "description": "Execution backend source of truth"
+      },
+      {
+        "path": "src-tauri/src/bin/codex_monitor_daemon/rpc/workspace.rs",
+        "description": "Daemon RPC workspace dispatcher"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "task-1",
+      "name": "Wire Forge Daemon RPC Routing",
+      "description": "Add missing Forge RPC method routing in daemon dispatcher and cover it with RPC-level tests so remote mode can invoke every forge_* command through JSON-RPC.",
+      "depends_on": [],
+      "files": [
+        "src-tauri/src/bin/codex_monitor_daemon/rpc/workspace.rs",
+        "src-tauri/src/bin/codex_monitor_daemon.rs"
+      ],
+      "verification": [
+        "New daemon RPC tests fail before implementation and pass after.",
+        "forge_list_plans and forge_get_plan_prompt routes are exercised via rpc::handle_rpc_request.",
+        "No regression in existing daemon tests for workspace/codex methods."
+      ]
+    },
+    {
+      "id": "task-2",
+      "name": "Enforce AI Review Evidence Gate",
+      "description": "Implement machine-enforced AI review completion by requiring a structured per-task review report artifact and validating it in Forge checks before final task completion.",
+      "depends_on": [
+        "task-1"
+      ],
+      "files": [
+        "src-tauri/src/shared/forge_execute_core.rs",
+        "src-tauri/resources/forge/templates/test-first-loop/prompts/execute.md",
+        "src-tauri/resources/forge/templates/test-first-loop/phases.json"
+      ],
+      "verification": [
+        "Forge execute core tests cover missing report, non-zero findings, and zero-findings success paths.",
+        "ai-review phase can no longer pass with empty/no evidence artifact.",
+        "Existing ai-review happy-path test remains green with valid artifact."
+      ]
+    },
+    {
+      "id": "task-3",
+      "name": "Add Risk-Adaptive Template",
+      "description": "Add a new forge template optimized for efficiency (risk-adaptive-loop) with tighter phase flow and script/prompt coverage so teams can choose a faster default model when appropriate.",
+      "depends_on": [
+        "task-2"
+      ],
+      "files": [
+        "src-tauri/resources/forge/templates/risk-adaptive-loop/template.json",
+        "src-tauri/resources/forge/templates/risk-adaptive-loop/phases.json",
+        "src-tauri/resources/forge/templates/risk-adaptive-loop/prompts/plan.md",
+        "src-tauri/resources/forge/templates/risk-adaptive-loop/prompts/execute.md",
+        "src-tauri/resources/forge/templates/risk-adaptive-loop/scripts/post-plan.mjs",
+        "src-tauri/resources/forge/templates/risk-adaptive-loop/scripts/post-step.mjs",
+        "src/features/forge/scripts/riskAdaptiveLoopScripts.test.ts"
+      ],
+      "verification": [
+        "Script tests prove phase initialization and prompt phase progression for the new template.",
+        "Bundled template listing includes risk-adaptive-loop metadata.",
+        "Template manifest files and entrypoints are complete and installable."
+      ]
+    },
+    {
+      "id": "task-4",
+      "name": "Harden Forge Polling",
+      "description": "Refine Forge panel polling to prevent stale async results from mutating state after workspace/plan switches and centralize polling intervals into constants.",
+      "depends_on": [
+        "task-3"
+      ],
+      "files": [
+        "src/features/forge/components/Forge.tsx",
+        "src/features/forge/components/Forge.plans.test.tsx"
+      ],
+      "verification": [
+        "Component tests validate stale polling responses are ignored after selection/workspace change.",
+        "Polling intervals are no longer duplicated magic numbers.",
+        "No regression in plan-selection and execution-toggle tests."
+      ]
+    },
+    {
+      "id": "task-5",
+      "name": "Bound Execution Retries and Waits",
+      "description": "Add explicit timeout and retry-budget controls in useForgeExecution for phase-final polling and failed phase checks to avoid infinite loops and runaway runs.",
+      "depends_on": [
+        "task-4"
+      ],
+      "files": [
+        "src/features/forge/hooks/useForgeExecution.ts",
+        "src/features/forge/hooks/useForgeExecution.test.ts"
+      ],
+      "verification": [
+        "Hook tests fail before and pass after for timeout and max-check-retry behavior.",
+        "Execution returns user-visible errors when budgets are exceeded.",
+        "Existing Forge execution UI tests stay green."
+      ]
+    },
+    {
+      "id": "task-6",
+      "name": "Fresh Skill Sync and Icon Fallback Cleanup",
+      "description": "Improve template skill synchronization so changed source skills refresh in .agents/skills and align frontend phase icon fallback IDs with valid icon names.",
+      "depends_on": [
+        "task-5"
+      ],
+      "files": [
+        "src-tauri/src/shared/forge_templates_core.rs",
+        "src/services/tauri.ts",
+        "src/services/tauri.test.ts"
+      ],
+      "verification": [
+        "New rust test proves sync updates stale files when source content changes.",
+        "Phase metadata fallback icon id is valid and consistent.",
+        "tauri forge phase-view tests pass with updated fallback behavior."
+      ]
+    }
+  ]
+}
