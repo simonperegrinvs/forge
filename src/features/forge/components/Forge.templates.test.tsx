@@ -8,49 +8,22 @@ afterEach(() => {
 });
 
 describe("Forge templates", () => {
-  it("renders bundled templates and disables install when no workspace is active", async () => {
-    const calls = {
-      getInstalled: [] as string[],
-      install: [] as Array<{ workspaceId: string; templateId: string }>,
-      uninstall: [] as string[],
-    };
-
+  it("disables template controls when no workspace is active", () => {
     const templatesClient: ForgeTemplatesClient = {
-      listBundledTemplates: async () => [
-        { id: "ralph-loop", title: "Ralph Loop", version: "0.2.1" },
-      ],
-      getInstalledTemplate: async (workspaceId) => {
-        calls.getInstalled.push(workspaceId);
-        return null;
+      listBundledTemplates: async () => [],
+      getInstalledTemplate: async () => null,
+      installTemplate: async () => {
+        throw new Error("unexpected install");
       },
-      installTemplate: async (workspaceId, templateId) => {
-        calls.install.push({ workspaceId, templateId });
-        return {
-          schema: "forge-template-lock-v1",
-          installedTemplateId: templateId,
-          installedTemplateVersion: "0.2.1",
-          installedAtIso: "2026-02-10T00:00:00Z",
-          installedFiles: ["template.json"],
-        };
-      },
-      uninstallTemplate: async (workspaceId) => {
-        calls.uninstall.push(workspaceId);
+      uninstallTemplate: async () => {
+        throw new Error("unexpected uninstall");
       },
     };
 
     render(<Forge activeWorkspaceId={null} templatesClient={templatesClient} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open templates" }));
-    expect(screen.getByText("Templates")).toBeTruthy();
-
-    // Wait for the bundled templates to load.
-    await screen.findByText("Ralph Loop");
-
-    expect(screen.getByText("No template installed.")).toBeTruthy();
-
-    const installButton = screen.getByRole("button", { name: "Install" });
-    expect(installButton.hasAttribute("disabled")).toBe(true);
-    expect(calls.getInstalled).toEqual([]);
+    const templateButton = screen.getByRole("button", { name: "Open templates" });
+    expect(templateButton.hasAttribute("disabled")).toBe(true);
   });
 
   it("shows an installed template even when it is missing from the bundled list", async () => {

@@ -1218,7 +1218,7 @@ mod tests {
                 };
                 json!({
                     "id": phase_id,
-                    "checks": [format!("node -e \"process.exit({exit_code})\"")]
+                    "checks": [format!("node -e process.exitCode={exit_code}")]
                 })
             })
             .collect::<Vec<_>>();
