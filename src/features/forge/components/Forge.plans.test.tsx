@@ -833,6 +833,424 @@ describe("Forge plans", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
   });
 
+  it("shows only the active task as running and demotes stale in-progress rows to pending", async () => {
+    const loadPhaseView = vi
+      .fn<NonNullable<ForgePlansClient["loadPhaseView"]>>()
+      .mockResolvedValue({
+        phases: [
+          {
+            id: "test-case-mapping",
+            title: "Test Case Mapping",
+            iconId: "taskfile",
+            order: 1,
+          },
+          {
+            id: "implementation",
+            title: "Implementation",
+            iconId: "console",
+            order: 2,
+          },
+        ],
+        taskPhaseStatusByTaskId: {
+          "task-1": {
+            "test-case-mapping": "completed",
+            implementation: "pending",
+          },
+          "task-2": {
+            "test-case-mapping": "completed",
+            implementation: "in_progress",
+          },
+        },
+      });
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [
+            { id: "task-1", name: "Task 1", status: "in_progress" },
+            { id: "task-2", name: "Task 2", status: "pending" },
+          ],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      loadPhaseView,
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => ({
+        planId: "alpha",
+        taskId: "task-2",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 2 prompt",
+      }),
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-2" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+
+    await waitFor(() =>
+      expect(loadPhaseView).toHaveBeenCalledWith("ws-1", "alpha", null),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+    expect(await screen.findByText("Phase implementation in progress")).toBeTruthy();
+
+    const staleRow = screen.getByText("Task 1").closest("li") as HTMLLIElement | null;
+    const activeRow = screen.getByText("Task 2").closest("li") as HTMLLIElement | null;
+    expect(staleRow).toBeTruthy();
+    expect(activeRow).toBeTruthy();
+    expect(staleRow?.className.includes("pending")).toBe(true);
+    expect(staleRow?.className.includes("inProgress")).toBe(false);
+    expect(activeRow?.className.includes("inProgress")).toBe(true);
+
+    expect(staleRow?.querySelector(".forge-running-icon.spinning")).toBeNull();
+    expect(activeRow?.querySelector(".forge-running-icon.spinning")).toBeTruthy();
+    expect(document.querySelectorAll(".forge-running-icon.spinning")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
+  });
+
+  it("demotes stale in-progress rows to completed when all phases are completed", async () => {
+    const loadPhaseView = vi
+      .fn<NonNullable<ForgePlansClient["loadPhaseView"]>>()
+      .mockResolvedValue({
+        phases: [
+          {
+            id: "test-case-mapping",
+            title: "Test Case Mapping",
+            iconId: "taskfile",
+            order: 1,
+          },
+          {
+            id: "implementation",
+            title: "Implementation",
+            iconId: "console",
+            order: 2,
+          },
+        ],
+        taskPhaseStatusByTaskId: {
+          "task-1": {
+            "test-case-mapping": "completed",
+            implementation: "completed",
+          },
+          "task-2": {
+            "test-case-mapping": "pending",
+            implementation: "in_progress",
+          },
+        },
+      });
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [
+            { id: "task-1", name: "Task 1", status: "in_progress" },
+            { id: "task-2", name: "Task 2", status: "pending" },
+          ],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      loadPhaseView,
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => ({
+        planId: "alpha",
+        taskId: "task-2",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 2 prompt",
+      }),
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-2" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+
+    await waitFor(() =>
+      expect(loadPhaseView).toHaveBeenCalledWith("ws-1", "alpha", null),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+    expect(await screen.findByText("Phase implementation in progress")).toBeTruthy();
+
+    const staleRow = screen.getByText("Task 1").closest("li") as HTMLLIElement | null;
+    const activeRow = screen.getByText("Task 2").closest("li") as HTMLLIElement | null;
+    expect(staleRow).toBeTruthy();
+    expect(activeRow).toBeTruthy();
+    expect(staleRow?.className.includes("completed")).toBe(true);
+    expect(staleRow?.className.includes("inProgress")).toBe(false);
+    expect(activeRow?.className.includes("inProgress")).toBe(true);
+
+    expect(staleRow?.querySelector(".forge-running-icon.spinning")).toBeNull();
+    expect(activeRow?.querySelector(".forge-running-icon.spinning")).toBeTruthy();
+    expect(document.querySelectorAll(".forge-running-icon.spinning")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
+  });
+
+  it("preserves single-row running invariants across deterministic phase-status matrices", async () => {
+    const phaseIds = ["test-case-mapping", "implementation", "ai-review"] as const;
+    const statuses = ["pending", "in_progress", "completed", "failed", "blocked"] as const;
+    let seed = 4242;
+    const next = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed;
+    };
+
+    for (let index = 0; index < 12; index += 1) {
+      const phaseStatuses = phaseIds.reduce<Record<string, (typeof statuses)[number]>>(
+        (acc, phaseId) => {
+          // Randomly omit some phase entries to cover missing-status fallback behavior.
+          if (next() % 4 === 0) {
+            return acc;
+          }
+          acc[phaseId] = statuses[next() % statuses.length];
+          return acc;
+        },
+        {},
+      );
+      const allCompleted = phaseIds.every(
+        (phaseId) => phaseStatuses[phaseId] === "completed",
+      );
+      const expectedStaleStatus = allCompleted ? "completed" : "pending";
+
+      const loadPhaseView = vi
+        .fn<NonNullable<ForgePlansClient["loadPhaseView"]>>()
+        .mockResolvedValue({
+          phases: [
+            {
+              id: "test-case-mapping",
+              title: "Test Case Mapping",
+              iconId: "taskfile",
+              order: 1,
+            },
+            {
+              id: "implementation",
+              title: "Implementation",
+              iconId: "console",
+              order: 2,
+            },
+            {
+              id: "ai-review",
+              title: "AI Review",
+              iconId: "folder-review",
+              order: 3,
+            },
+          ],
+          taskPhaseStatusByTaskId: {
+            "task-1": phaseStatuses,
+            "task-2": {
+              "test-case-mapping": "completed",
+              implementation: "in_progress",
+              "ai-review": "pending",
+            },
+          },
+        });
+
+      const plansClient: ForgePlansClient = {
+        listPlans: async () => [
+          {
+            id: `alpha-${index}`,
+            title: "Alpha",
+            goal: "Alpha goal",
+            tasks: [
+              { id: "task-1", name: "Task 1", status: "in_progress" },
+              { id: "task-2", name: "Task 2", status: "pending" },
+            ],
+            currentTaskId: null,
+            planPath: "plans/alpha/plan.json",
+            updatedAtMs: 0,
+          },
+        ],
+        loadPhaseView,
+        getPlanPrompt: async () => "",
+        prepareExecution: async () => {},
+        resetExecutionProgress: async () => {},
+        getNextPhasePrompt: async () => ({
+          planId: `alpha-${index}`,
+          taskId: "task-2",
+          phaseId: "implementation",
+          isLastPhase: true,
+          promptText: "task 2 prompt",
+        }),
+        getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+        runPhaseChecks: async () => ({ ok: true, results: [] }),
+        interruptTurn: async () => ({}),
+        connectWorkspace: async () => {},
+        startThread: async () => ({ result: { thread: { id: "thread-2" } } }),
+        sendUserMessage: async () => ({}),
+      };
+
+      const rendered = render(
+        <Forge
+          activeWorkspaceId="ws-1"
+          templatesClient={templatesClient}
+          plansClient={plansClient}
+          collaborationModes={[]}
+        />,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha-" + index + ")" }));
+      await waitFor(() =>
+        expect(loadPhaseView).toHaveBeenCalledWith("ws-1", `alpha-${index}`, null),
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+      expect(await screen.findByText("Phase implementation in progress")).toBeTruthy();
+
+      const staleRow = screen.getByText("Task 1").closest("li") as HTMLLIElement | null;
+      const activeRow = screen.getByText("Task 2").closest("li") as HTMLLIElement | null;
+      expect(staleRow).toBeTruthy();
+      expect(activeRow).toBeTruthy();
+      expect(staleRow?.className.includes(expectedStaleStatus)).toBe(true);
+      expect(staleRow?.className.includes("inProgress")).toBe(false);
+      expect(activeRow?.className.includes("inProgress")).toBe(true);
+      expect(staleRow?.querySelector(".forge-running-icon.spinning")).toBeNull();
+      expect(activeRow?.querySelector(".forge-running-icon.spinning")).toBeTruthy();
+      expect(document.querySelectorAll(".forge-running-icon.spinning")).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
+      rendered.unmount();
+    }
+  });
+
+  it("does not render a running spinner when runningInfo points to a non-visible task", async () => {
+    const loadPhaseView = vi
+      .fn<NonNullable<ForgePlansClient["loadPhaseView"]>>()
+      .mockResolvedValue({
+        phases: [
+          {
+            id: "test-case-mapping",
+            title: "Test Case Mapping",
+            iconId: "taskfile",
+            order: 1,
+          },
+          {
+            id: "implementation",
+            title: "Implementation",
+            iconId: "console",
+            order: 2,
+          },
+        ],
+        taskPhaseStatusByTaskId: {
+          "task-1": {
+            "test-case-mapping": "completed",
+            implementation: "pending",
+          },
+          "task-2": {
+            "test-case-mapping": "pending",
+            implementation: "pending",
+          },
+        },
+      });
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [
+            { id: "task-1", name: "Task 1", status: "in_progress" },
+            { id: "task-2", name: "Task 2", status: "pending" },
+          ],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      loadPhaseView,
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => ({
+        planId: "alpha",
+        taskId: "task-3",
+        phaseId: "implementation",
+        isLastPhase: true,
+        promptText: "task 3 prompt",
+      }),
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-3" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+
+    await waitFor(() =>
+      expect(loadPhaseView).toHaveBeenCalledWith("ws-1", "alpha", null),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+    expect(await screen.findByRole("button", { name: "Pause plan" })).toBeTruthy();
+
+    const staleRow = screen.getByText("Task 1").closest("li") as HTMLLIElement | null;
+    const secondRow = screen.getByText("Task 2").closest("li") as HTMLLIElement | null;
+    expect(staleRow).toBeTruthy();
+    expect(secondRow).toBeTruthy();
+    expect(staleRow?.className.includes("pending")).toBe(true);
+    expect(staleRow?.className.includes("inProgress")).toBe(false);
+    expect(secondRow?.className.includes("inProgress")).toBe(false);
+    expect(document.querySelectorAll(".forge-running-icon.spinning")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause plan" }));
+  });
+
   it("renders ordered phase chips with status classes and keeps failed ai-review blocking", async () => {
     const loadPhaseView = vi
       .fn<NonNullable<ForgePlansClient["loadPhaseView"]>>()

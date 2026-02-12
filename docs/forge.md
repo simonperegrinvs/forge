@@ -68,6 +68,14 @@ Execution UI rendering behavior:
   - running phase or `in_progress` -> `is-current`
   - `completed` -> `is-complete`
   - `pending` / `blocked` / `failed` -> `is-pending`
+- `src/features/forge/components/Forge.tsx::resolveForgeTaskRowStatus` computes task-row state with deterministic precedence:
+  - active `runningInfo.taskId` -> row `inProgress`
+  - otherwise phase-state fallback from `phaseView.taskPhaseStatusByTaskId[taskId]`
+  - otherwise plan task status from `forge_list_plans` / `state-v2`
+- Stale non-active `in_progress` rows are demoted while another task is actively running:
+  - demote to `completed` if all phases for that task are `completed`
+  - otherwise demote to `pending`
+- If `runningInfo.taskId` does not match any visible plan task row, no row renders a running spinner.
 - Forge sidebar panel project gate (`src/features/forge/components/Forge.tsx` + `src/features/app/components/Sidebar.tsx`):
   - Forge panel can be opened from the sidebar header even when no workspace is active.
   - If `activeWorkspaceId` is null/blank, Forge renders blocker copy `Select a project first to use Forge.`.
@@ -167,7 +175,7 @@ Current regression coverage for this behavior spans frontend, template hooks, an
   - Covers no-project blocker copy, disabled Forge controls, blocked menu reachability, no backend calls in blocked mode, and unchanged sidebar Forge open/close toggling.
 - Frontend execution chip rendering:
   - `src/features/forge/components/Forge.plans.test.tsx`
-  - Covers template-order chip rendering, class-state mapping, icon URL fallback, and terminal `ai-review` staying non-completed/visibly blocking.
+  - Covers template-order chip rendering, class-state mapping, deterministic single-running-row behavior, stale non-active `in_progress` demotion (`pending` vs `completed`), non-visible running-task guard, icon URL fallback, and terminal `ai-review` staying non-completed/visibly blocking.
 - Frontend icon resolver:
   - `src/utils/forgePhaseIcons.test.ts`
   - Covers valid icon URL resolution, invalid-id fallback to `file`, and whitespace-trimmed valid ids.
@@ -181,7 +189,7 @@ Current regression coverage for this behavior spans frontend, template hooks, an
   - `src-tauri/src/shared/forge_execute_core.rs` tests under `forge_execute_core::tests`
   - Covers partial progression, non-final no-commit success, final `ai-review` failure blocking completion, and final `ai-review` success commit gating.
 
-Task-local validation commands for project-gate behavior:
+Task-local validation commands for Forge panel/runtime behavior:
 
 - `npm run test -- src/features/forge/components/Forge.plans.test.tsx src/features/app/components/Sidebar.test.tsx`
 - `npm run test -- --coverage --coverage.include=src/features/forge/components/Forge.tsx src/features/forge/components/Forge.plans.test.tsx`

@@ -137,6 +137,7 @@ const EMPTY_PHASE_VIEW: ForgePhaseView = {
 };
 
 type ForgePhaseChipState = "is-complete" | "is-current" | "is-pending";
+type ForgeRunningInfo = { taskId: string; phaseId: string } | null;
 
 function formatPlanLabel(plan: ForgeWorkspacePlan): string {
   const title = plan.title?.trim() ?? "";
@@ -171,7 +172,7 @@ function mapForgePhaseChipState(
   taskId: string,
   phaseId: string,
   phaseStatus: ForgePhaseViewStatus,
-  runningInfo: { taskId: string; phaseId: string } | null,
+  runningInfo: ForgeRunningInfo,
 ): ForgePhaseChipState {
   const normalizedStatus = phaseStatus.trim().toLowerCase();
   if (runningInfo?.taskId === taskId && runningInfo.phaseId === phaseId) {
@@ -184,6 +185,70 @@ function mapForgePhaseChipState(
     return "is-complete";
   }
   return "is-pending";
+}
+
+function allTaskPhasesCompleted(
+  taskPhaseStatuses: Record<string, ForgePhaseViewStatus>,
+  phases: ForgePhaseView["phases"],
+): boolean {
+  if (phases.length > 0) {
+    return phases.every(
+      (phase) =>
+        (taskPhaseStatuses[phase.id] ?? "pending").trim().toLowerCase() ===
+        "completed",
+    );
+  }
+  const phaseStatuses = Object.values(taskPhaseStatuses);
+  return (
+    phaseStatuses.length > 0 &&
+    phaseStatuses.every((status) => status.trim().toLowerCase() === "completed")
+  );
+}
+
+function deriveStatusFromTaskPhases(
+  taskPhaseStatuses: Record<string, ForgePhaseViewStatus>,
+  phases: ForgePhaseView["phases"],
+): ForgeItemStatus | null {
+  const phaseStatuses = Object.values(taskPhaseStatuses);
+  if (phaseStatuses.length === 0) {
+    return null;
+  }
+  if (allTaskPhasesCompleted(taskPhaseStatuses, phases)) {
+    return "completed";
+  }
+  if (phaseStatuses.some((status) => status.trim().toLowerCase() === "in_progress")) {
+    return "inProgress";
+  }
+  return "pending";
+}
+
+function resolveForgeTaskRowStatus({
+  taskId,
+  planTaskStatus,
+  taskPhaseStatuses,
+  phases,
+  runningInfo,
+}: {
+  taskId: string;
+  planTaskStatus: ForgeItemStatus;
+  taskPhaseStatuses: Record<string, ForgePhaseViewStatus>;
+  phases: ForgePhaseView["phases"];
+  runningInfo: ForgeRunningInfo;
+}): ForgeItemStatus {
+  if (runningInfo?.taskId === taskId) {
+    return "inProgress";
+  }
+
+  const phaseDerivedStatus = deriveStatusFromTaskPhases(taskPhaseStatuses, phases);
+  const resolvedStatus = phaseDerivedStatus ?? planTaskStatus;
+
+  if (runningInfo && resolvedStatus === "inProgress") {
+    return allTaskPhasesCompleted(taskPhaseStatuses, phases)
+      ? "completed"
+      : "pending";
+  }
+
+  return resolvedStatus;
 }
 
 function ForgeTemplatesModal({
@@ -902,13 +967,17 @@ export function Forge({
             <ol className="forge-items">
               {selectedPlan.items.map((item, index) => {
                 const isActiveTask = runningInfo?.taskId === item.id;
-                const effectiveStatus: ForgeItemStatus = isActiveTask
-                  ? "inProgress"
-                  : item.status;
+                const taskPhaseStatuses = phaseView.taskPhaseStatusByTaskId[item.id] ?? {};
+                const effectiveStatus = resolveForgeTaskRowStatus({
+                  taskId: item.id,
+                  planTaskStatus: item.status,
+                  taskPhaseStatuses,
+                  phases: phaseView.phases,
+                  runningInfo,
+                });
                 const isCompleted = effectiveStatus === "completed";
                 const isRunning = effectiveStatus === "inProgress";
                 const isActivePhase = isActiveTask && runningInfo?.phaseId;
-                const taskPhaseStatuses = phaseView.taskPhaseStatusByTaskId[item.id] ?? {};
 
                 return (
                   <li key={`${item.id}-${item.title}-${index}`} className={`forge-item ${effectiveStatus}`}>
