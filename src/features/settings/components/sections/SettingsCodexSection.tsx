@@ -254,7 +254,7 @@ export function SettingsCodexSection({
     <section className="settings-section">
       <div className="settings-section-title">Codex</div>
       <div className="settings-section-subtitle">
-        Configure the Codex CLI used by CodexMonitor and validate the install.
+        Configure the Codex CLI used by Forge and validate the install.
       </div>
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="codex-path">

@@ -206,7 +206,7 @@ pub(crate) async fn orbit_sign_in_start_core(
     let requested_name = runner_name
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or("CodexMonitor");
+        .unwrap_or("Forge");
 
     let response = client
         .post(&endpoint)

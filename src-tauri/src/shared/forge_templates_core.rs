@@ -253,7 +253,7 @@ fn walk_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String
 
 /// Best-effort: mirror Forge template skills into Codex's repository skill directory.
 ///
-/// Forge templates install skills into `.agent/skills/*` (CodexMonitor internal). Codex discovers
+/// Forge templates install skills into `.agent/skills/*` (Forge internal). Codex discovers
 /// repo-scoped skills under `.agents/skills/*` (note the plural `.agents`). This sync step bridges
 /// those two layouts so skills are visible to Codex (e.g. `skills/list` and `@skill` resolution).
 ///
