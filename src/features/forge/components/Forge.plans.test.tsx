@@ -709,6 +709,91 @@ describe("Forge plans", () => {
     expect(aiReviewIcon).toBe("/assets/material-icons/file.svg");
   });
 
+  it("keeps terminal ai-review failures visibly non-completed even after prior phases complete", async () => {
+    const loadPhaseView = vi
+      .fn<NonNullable<ForgePlansClient["loadPhaseView"]>>()
+      .mockResolvedValue({
+        phases: [
+          { id: "test-case-mapping", title: "Test Case Mapping", iconId: "taskfile", order: 1 },
+          { id: "behavioral-tests", title: "Behavioral Tests", iconId: "cucumber", order: 2 },
+          { id: "implementation", title: "Implementation", iconId: "console", order: 3 },
+          {
+            id: "coverage-hardening",
+            title: "Coverage Hardening",
+            iconId: "codecov",
+            order: 4,
+          },
+          { id: "documentation", title: "Documentation", iconId: "readme", order: 5 },
+          { id: "ai-review", title: "AI Review Gate", iconId: "folder-review", order: 6 },
+        ],
+        taskPhaseStatusByTaskId: {
+          "task-1": {
+            "test-case-mapping": "completed",
+            "behavioral-tests": "completed",
+            implementation: "completed",
+            "coverage-hardening": "completed",
+            documentation: "completed",
+            "ai-review": "failed",
+          },
+        },
+      });
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [
+        {
+          id: "alpha",
+          title: "Alpha",
+          goal: "Alpha goal",
+          tasks: [{ id: "task-1", name: "Task 1", status: "completed" }],
+          currentTaskId: null,
+          planPath: "plans/alpha/plan.json",
+          updatedAtMs: 0,
+        },
+      ],
+      loadPhaseView,
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Click to select/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" }));
+
+    await waitFor(() =>
+      expect(loadPhaseView).toHaveBeenCalledWith("ws-1", "alpha", null),
+    );
+
+    const taskRow = screen.getByText("Task 1").closest("li");
+    expect(taskRow).toBeTruthy();
+    const rowElement = taskRow as HTMLLIElement;
+    const aiReviewChip = rowElement.querySelector(
+      '.forge-phase[data-phase-id="ai-review"]',
+    ) as HTMLElement | null;
+    const docsChip = rowElement.querySelector(
+      '.forge-phase[data-phase-id="documentation"]',
+    ) as HTMLElement | null;
+
+    expect(docsChip?.className.includes("is-complete")).toBe(true);
+    expect(aiReviewChip?.className.includes("is-pending")).toBe(true);
+    expect(aiReviewChip?.className.includes("is-complete")).toBe(false);
+  });
+
   it("keeps a pending phase on a single prompt without auto-resending", async () => {
     vi.useFakeTimers();
 

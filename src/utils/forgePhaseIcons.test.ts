@@ -11,4 +11,8 @@ describe("forgePhaseIcons", () => {
       "/assets/material-icons/file.svg",
     );
   });
+
+  it("accepts valid icon ids with surrounding whitespace", () => {
+    expect(getForgePhaseIconUrl("  taskfile  ")).toBe("/assets/material-icons/taskfile.svg");
+  });
 });

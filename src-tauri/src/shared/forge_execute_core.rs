@@ -1067,6 +1067,27 @@ pub(crate) async fn forge_run_phase_checks_core(
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::future::Future;
+    use std::process::Command;
+
+    const SIX_PHASE_IDS: [&str; 6] = [
+        "test-case-mapping",
+        "behavioral-tests",
+        "implementation",
+        "coverage-hardening",
+        "documentation",
+        "ai-review",
+    ];
+
+    struct TestWorkspace {
+        root: PathBuf,
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
 
     fn temp_workspace_root() -> PathBuf {
         std::env::temp_dir().join(format!("codex-monitor-forge-execute-test-{}", Uuid::new_v4()))
@@ -1083,26 +1104,72 @@ mod tests {
         write_text(path, &format!("{}\n", serde_json::to_string_pretty(&value).expect("json encode")));
     }
 
-    #[test]
-    fn get_next_phase_prompt_regenerates_even_when_cached_prompt_exists() {
+    fn run_async_test<F>(future: F)
+    where
+        F: Future<Output = ()>,
+    {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("build runtime");
-        rt.block_on(async {
+        rt.block_on(future);
+    }
+
+    fn run_git(workspace: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(workspace)
+            .output()
+            .expect("run git");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: stdout={} stderr={}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn init_git_repo(workspace: &Path) {
+        run_git(workspace, &["init"]);
+        run_git(workspace, &["config", "user.email", "forge-tests@example.com"]);
+        run_git(workspace, &["config", "user.name", "Forge Tests"]);
+    }
+
+    fn build_task_phase_state(statuses: [&str; 6]) -> Vec<serde_json::Value> {
+        SIX_PHASE_IDS
+            .iter()
+            .enumerate()
+            .map(|(index, phase_id)| {
+                json!({
+                    "id": phase_id,
+                    "status": statuses[index],
+                    "attempts": 0,
+                    "notes": ""
+                })
+            })
+            .collect()
+    }
+
+    fn setup_six_phase_workspace(
+        task_one_status: &str,
+        task_one_phase_statuses: [&str; 6],
+        ai_review_exit_code: i32,
+    ) -> TestWorkspace {
         let workspace = temp_workspace_root();
         std::fs::create_dir_all(&workspace).expect("create workspace");
 
-        let template_root = workspace.join(".agent").join("templates").join("ralph-loop");
+        let template_id = "test-first-loop";
+        let template_root = workspace.join(".agent").join("templates").join(template_id);
         std::fs::create_dir_all(template_root.join("scripts")).expect("create scripts dir");
 
         write_json(
             &workspace.join(".agent").join("template-lock.json"),
             json!({
                 "schema": "forge-template-lock-v1",
-                "installedTemplateId": "ralph-loop",
-                "installedTemplateVersion": "0.2.1",
-                "installedAtIso": "2026-02-11T00:00:00Z",
+                "installedTemplateId": template_id,
+                "installedTemplateVersion": "0.1.0",
+                "installedAtIso": "2026-02-12T00:00:00Z",
                 "installedFiles": ["template.json"]
             }),
         );
@@ -1111,9 +1178,9 @@ mod tests {
             &template_root.join("template.json"),
             json!({
                 "schema": "forge-template-v1",
-                "id": "ralph-loop",
-                "title": "Ralph Loop",
-                "version": "0.2.1",
+                "id": template_id,
+                "title": "Test-First Loop",
+                "version": "0.1.0",
                 "files": [
                     "template.json",
                     "phases.json",
@@ -1140,13 +1207,26 @@ mod tests {
                 }
             }),
         );
+
+        let phases = SIX_PHASE_IDS
+            .iter()
+            .map(|phase_id| {
+                let exit_code = if *phase_id == "ai-review" {
+                    ai_review_exit_code
+                } else {
+                    0
+                };
+                json!({
+                    "id": phase_id,
+                    "checks": [format!("node -e \"process.exit({exit_code})\"")]
+                })
+            })
+            .collect::<Vec<_>>();
         write_json(
             &template_root.join("phases.json"),
             json!({
                 "schema": "forge-phases-v1",
-                "phases": [
-                    { "id": "implementation", "checks": [] }
-                ]
+                "phases": phases
             }),
         );
         write_text(&template_root.join("prompts").join("plan.md"), "# Mode: plan\n");
@@ -1169,7 +1249,7 @@ const i = process.argv.indexOf('--context');\n\
 if (i < 0 || !process.argv[i + 1]) process.exit(2);\n\
 const ctx = JSON.parse(await fs.readFile(process.argv[i + 1], 'utf8'));\n\
 await fs.mkdir(path.dirname(ctx.generatedExecutePromptPath), { recursive: true });\n\
-await fs.writeFile(ctx.generatedExecutePromptPath, 'fresh prompt from post-step\\n', 'utf8');\n",
+await fs.writeFile(ctx.generatedExecutePromptPath, 'generated prompt from post-step\\n', 'utf8');\n",
         );
 
         let plan_dir = workspace.join("plans").join("alpha");
@@ -1196,11 +1276,11 @@ await fs.writeFile(ctx.generatedExecutePromptPath, 'fresh prompt from post-step\
                 "tasks": [
                     {
                         "id": "task-1",
-                        "status": "completed",
+                        "status": task_one_status,
                         "attempts": 0,
                         "notes": "",
-                        "commit_sha": "abc123",
-                        "phases": [{ "id": "implementation", "status": "completed", "attempts": 0, "notes": "" }]
+                        "commit_sha": null,
+                        "phases": build_task_phase_state(task_one_phase_statuses)
                     },
                     {
                         "id": "task-2",
@@ -1208,25 +1288,326 @@ await fs.writeFile(ctx.generatedExecutePromptPath, 'fresh prompt from post-step\
                         "attempts": 0,
                         "notes": "",
                         "commit_sha": null,
-                        "phases": [{ "id": "implementation", "status": "pending", "attempts": 0, "notes": "" }]
+                        "phases": [
+                            { "id": "implementation", "status": "pending", "attempts": 0, "notes": "" }
+                        ]
                     }
                 ]
             }),
         );
-        write_text(
-            &plan_dir.join("execute-prompt.md"),
-            "stale prompt that should not be returned\n",
-        );
 
-        let next = forge_get_next_phase_prompt_core(&workspace, "alpha")
-            .await
-            .expect("get next phase prompt")
-            .expect("expected runnable phase");
-        assert_eq!(next.task_id, "task-2");
-        assert_eq!(next.phase_id, "implementation");
-        assert_eq!(next.prompt_text.trim(), "fresh prompt from post-step");
+        TestWorkspace { root: workspace }
+    }
 
-        let _ = std::fs::remove_dir_all(&workspace);
+    fn load_state_task(workspace: &Path, plan_id: &str, task_id: &str) -> StateTaskV2 {
+        let state_path = workspace.join("plans").join(plan_id).join("state.json");
+        let state = read_json_file::<StateV2>(&state_path).expect("load state");
+        state
+            .tasks
+            .into_iter()
+            .find(|task| task.id == task_id)
+            .expect("task in state")
+    }
+
+    fn phase_status(task: &StateTaskV2, phase_id: &str) -> String {
+        task.phases
+            .iter()
+            .find(|phase| phase.id == phase_id)
+            .map(|phase| phase.status.clone())
+            .expect("phase in task")
+    }
+
+    #[test]
+    fn get_next_phase_prompt_regenerates_even_when_cached_prompt_exists() {
+        run_async_test(async {
+            let workspace = temp_workspace_root();
+            std::fs::create_dir_all(&workspace).expect("create workspace");
+
+            let template_root = workspace.join(".agent").join("templates").join("ralph-loop");
+            std::fs::create_dir_all(template_root.join("scripts")).expect("create scripts dir");
+
+            write_json(
+                &workspace.join(".agent").join("template-lock.json"),
+                json!({
+                    "schema": "forge-template-lock-v1",
+                    "installedTemplateId": "ralph-loop",
+                    "installedTemplateVersion": "0.2.1",
+                    "installedAtIso": "2026-02-11T00:00:00Z",
+                    "installedFiles": ["template.json"]
+                }),
+            );
+
+            write_json(
+                &template_root.join("template.json"),
+                json!({
+                    "schema": "forge-template-v1",
+                    "id": "ralph-loop",
+                    "title": "Ralph Loop",
+                    "version": "0.2.1",
+                    "files": [
+                        "template.json",
+                        "phases.json",
+                        "prompts/plan.md",
+                        "prompts/execute.md",
+                        "schemas/plan.schema.json",
+                        "schemas/state.schema.json",
+                        "scripts/post-plan.mjs",
+                        "scripts/pre-execute.mjs",
+                        "scripts/post-step.mjs"
+                    ],
+                    "entrypoints": {
+                        "phases": "phases.json",
+                        "planPrompt": "prompts/plan.md",
+                        "executePrompt": "prompts/execute.md",
+                        "planSchema": "schemas/plan.schema.json",
+                        "stateSchema": "schemas/state.schema.json",
+                        "requiredSkills": [],
+                        "hooks": {
+                            "postPlan": "scripts/post-plan.mjs",
+                            "preExecute": "scripts/pre-execute.mjs",
+                            "postStep": "scripts/post-step.mjs"
+                        }
+                    }
+                }),
+            );
+            write_json(
+                &template_root.join("phases.json"),
+                json!({
+                    "schema": "forge-phases-v1",
+                    "phases": [
+                        { "id": "implementation", "checks": [] }
+                    ]
+                }),
+            );
+            write_text(&template_root.join("prompts").join("plan.md"), "# Mode: plan\n");
+            write_text(&template_root.join("prompts").join("execute.md"), "# Mode: execute\n");
+            write_text(&template_root.join("schemas").join("plan.schema.json"), "{}\n");
+            write_text(&template_root.join("schemas").join("state.schema.json"), "{}\n");
+            write_text(
+                &template_root.join("scripts").join("post-plan.mjs"),
+                "process.exit(0);\n",
+            );
+            write_text(
+                &template_root.join("scripts").join("pre-execute.mjs"),
+                "process.exit(0);\n",
+            );
+            write_text(
+                &template_root.join("scripts").join("post-step.mjs"),
+                "import fs from 'node:fs/promises';\n\
+import path from 'node:path';\n\
+const i = process.argv.indexOf('--context');\n\
+if (i < 0 || !process.argv[i + 1]) process.exit(2);\n\
+const ctx = JSON.parse(await fs.readFile(process.argv[i + 1], 'utf8'));\n\
+await fs.mkdir(path.dirname(ctx.generatedExecutePromptPath), { recursive: true });\n\
+await fs.writeFile(ctx.generatedExecutePromptPath, 'fresh prompt from post-step\\n', 'utf8');\n",
+            );
+
+            let plan_dir = workspace.join("plans").join("alpha");
+            std::fs::create_dir_all(&plan_dir).expect("create plan dir");
+            write_json(
+                &plan_dir.join("plan.json"),
+                json!({
+                    "$schema": "plan-v1",
+                    "id": "alpha",
+                    "goal": "Test goal",
+                    "tasks": [
+                        { "id": "task-1", "name": "Task 1", "depends_on": [] },
+                        { "id": "task-2", "name": "Task 2", "depends_on": ["task-1"] }
+                    ]
+                }),
+            );
+            write_json(
+                &plan_dir.join("state.json"),
+                json!({
+                    "$schema": "state-v2",
+                    "plan_id": "alpha",
+                    "iteration": 0,
+                    "summary": "",
+                    "tasks": [
+                        {
+                            "id": "task-1",
+                            "status": "completed",
+                            "attempts": 0,
+                            "notes": "",
+                            "commit_sha": "abc123",
+                            "phases": [{ "id": "implementation", "status": "completed", "attempts": 0, "notes": "" }]
+                        },
+                        {
+                            "id": "task-2",
+                            "status": "pending",
+                            "attempts": 0,
+                            "notes": "",
+                            "commit_sha": null,
+                            "phases": [{ "id": "implementation", "status": "pending", "attempts": 0, "notes": "" }]
+                        }
+                    ]
+                }),
+            );
+            write_text(
+                &plan_dir.join("execute-prompt.md"),
+                "stale prompt that should not be returned\n",
+            );
+
+            let next = forge_get_next_phase_prompt_core(&workspace, "alpha")
+                .await
+                .expect("get next phase prompt")
+                .expect("expected runnable phase");
+            assert_eq!(next.task_id, "task-2");
+            assert_eq!(next.phase_id, "implementation");
+            assert_eq!(next.prompt_text.trim(), "fresh prompt from post-step");
+
+            let _ = std::fs::remove_dir_all(&workspace);
+        });
+    }
+
+    #[test]
+    fn get_next_phase_prompt_selects_first_incomplete_phase_for_partially_completed_task() {
+        run_async_test(async {
+            let fixture = setup_six_phase_workspace(
+                "in_progress",
+                [
+                    "completed",
+                    "completed",
+                    "completed",
+                    "in_progress",
+                    "pending",
+                    "pending",
+                ],
+                0,
+            );
+
+            let next = forge_get_next_phase_prompt_core(&fixture.root, "alpha")
+                .await
+                .expect("get next phase")
+                .expect("expected next phase");
+            assert_eq!(next.task_id, "task-1");
+            assert_eq!(next.phase_id, "coverage-hardening");
+            assert!(!next.is_last_phase);
+            assert_eq!(next.prompt_text.trim(), "generated prompt from post-step");
+        });
+    }
+
+    #[test]
+    fn run_phase_checks_non_final_success_completes_only_current_phase_without_commit() {
+        run_async_test(async {
+            let fixture = setup_six_phase_workspace(
+                "pending",
+                [
+                    "pending",
+                    "pending",
+                    "pending",
+                    "pending",
+                    "pending",
+                    "pending",
+                ],
+                0,
+            );
+
+            let result =
+                forge_run_phase_checks_core(&fixture.root, "alpha", "task-1", "test-case-mapping")
+                    .await
+                    .expect("run phase checks");
+            assert!(result.ok);
+            assert!(!result.results.iter().any(|check| check.id == "forge-commit"));
+
+            let task = load_state_task(&fixture.root, "alpha", "task-1");
+            assert_eq!(task.status, "in_progress");
+            assert_eq!(task.commit_sha, None);
+            assert_eq!(phase_status(&task, "test-case-mapping"), "completed");
+            assert_eq!(phase_status(&task, "behavioral-tests"), "pending");
+            assert_eq!(phase_status(&task, "ai-review"), "pending");
+
+            let next = forge_get_next_phase_prompt_core(&fixture.root, "alpha")
+                .await
+                .expect("get next phase")
+                .expect("expected next phase");
+            assert_eq!(next.task_id, "task-1");
+            assert_eq!(next.phase_id, "behavioral-tests");
+            assert!(!next.is_last_phase);
+        });
+    }
+
+    #[test]
+    fn run_phase_checks_final_ai_review_failure_blocks_completion_and_progression() {
+        run_async_test(async {
+            let fixture = setup_six_phase_workspace(
+                "in_progress",
+                [
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "pending",
+                ],
+                1,
+            );
+
+            let result = forge_run_phase_checks_core(&fixture.root, "alpha", "task-1", "ai-review")
+                .await
+                .expect("run phase checks");
+            assert!(!result.ok);
+            assert!(result.results.iter().any(|check| check.exit_code != 0));
+            assert!(!result.results.iter().any(|check| check.id == "forge-commit"));
+
+            let task = load_state_task(&fixture.root, "alpha", "task-1");
+            assert_eq!(task.status, "in_progress");
+            assert_eq!(task.commit_sha, None);
+            assert_eq!(phase_status(&task, "ai-review"), "in_progress");
+
+            let next = forge_get_next_phase_prompt_core(&fixture.root, "alpha")
+                .await
+                .expect("get next phase")
+                .expect("expected next phase");
+            assert_eq!(next.task_id, "task-1");
+            assert_eq!(next.phase_id, "ai-review");
+            assert!(next.is_last_phase);
+        });
+    }
+
+    #[test]
+    fn run_phase_checks_final_ai_review_success_completes_task_and_records_commit() {
+        run_async_test(async {
+            let fixture = setup_six_phase_workspace(
+                "in_progress",
+                [
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "pending",
+                ],
+                0,
+            );
+            init_git_repo(&fixture.root);
+
+            let result = forge_run_phase_checks_core(&fixture.root, "alpha", "task-1", "ai-review")
+                .await
+                .expect("run phase checks");
+            assert!(result.ok);
+            assert!(result
+                .results
+                .iter()
+                .any(|check| check.id == "forge-commit" && check.exit_code == 0));
+
+            let task = load_state_task(&fixture.root, "alpha", "task-1");
+            assert_eq!(task.status, "completed");
+            assert_eq!(phase_status(&task, "ai-review"), "completed");
+            assert!(
+                task.commit_sha
+                    .as_ref()
+                    .map(|sha| !sha.trim().is_empty())
+                    .unwrap_or(false)
+            );
+
+            let next = forge_get_next_phase_prompt_core(&fixture.root, "alpha")
+                .await
+                .expect("get next phase")
+                .expect("expected next phase");
+            assert_eq!(next.task_id, "task-2");
+            assert_eq!(next.phase_id, "implementation");
+            assert!(next.is_last_phase);
         });
     }
 }
