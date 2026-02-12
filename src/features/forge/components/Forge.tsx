@@ -17,10 +17,13 @@ import { useDismissibleMenu } from "../../app/hooks/useDismissibleMenu";
 import {
   forgeGetInstalledTemplate,
   forgeInstallTemplate,
+  forgeLoadPhaseView,
   forgeListBundledTemplates,
   forgeUninstallTemplate,
   type ForgeBundledTemplateInfo,
   type ForgeNextPhasePrompt,
+  type ForgePhaseViewStatus,
+  type ForgePhaseView,
   type ForgePhaseStatus,
   type ForgeRunPhaseChecksResponse,
   type ForgeTemplateLock,
@@ -40,6 +43,7 @@ import {
   startThread,
 } from "../../../services/tauri";
 import { useForgeExecution } from "../hooks/useForgeExecution";
+import { getForgePhaseIconUrl } from "../../../utils/forgePhaseIcons";
 
 export type ForgeTemplatesClient = {
   listBundledTemplates: () => Promise<ForgeBundledTemplateInfo[]>;
@@ -50,6 +54,11 @@ export type ForgeTemplatesClient = {
 
 export type ForgePlansClient = {
   listPlans: (workspaceId: string) => Promise<ForgeWorkspacePlan[]>;
+  loadPhaseView?: (
+    workspaceId: string,
+    planId: string,
+    installedTemplateId: string | null,
+  ) => Promise<ForgePhaseView>;
   getPlanPrompt: (workspaceId: string) => Promise<string>;
   prepareExecution: (workspaceId: string, planId: string) => Promise<void>;
   resetExecutionProgress: (workspaceId: string, planId: string) => Promise<void>;
@@ -95,6 +104,7 @@ const defaultForgeTemplatesClient: ForgeTemplatesClient = {
 
 const defaultForgePlansClient: ForgePlansClient = {
   listPlans: forgeListPlans,
+  loadPhaseView: forgeLoadPhaseView,
   getPlanPrompt: forgeGetPlanPrompt,
   prepareExecution: forgePrepareExecution,
   resetExecutionProgress: forgeResetExecutionProgress,
@@ -120,6 +130,13 @@ type ForgePlan = {
   name: string;
   items: ForgePlanItem[];
 };
+
+const EMPTY_PHASE_VIEW: ForgePhaseView = {
+  phases: [],
+  taskPhaseStatusByTaskId: {},
+};
+
+type ForgePhaseChipState = "is-complete" | "is-current" | "is-pending";
 
 function formatPlanLabel(plan: ForgeWorkspacePlan): string {
   const title = plan.title?.trim() ?? "";
@@ -148,6 +165,25 @@ function mapForgeItemStatus(status: string): ForgeItemStatus {
     return "inProgress";
   }
   return "pending";
+}
+
+function mapForgePhaseChipState(
+  taskId: string,
+  phaseId: string,
+  phaseStatus: ForgePhaseViewStatus,
+  runningInfo: { taskId: string; phaseId: string } | null,
+): ForgePhaseChipState {
+  const normalizedStatus = phaseStatus.trim().toLowerCase();
+  if (runningInfo?.taskId === taskId && runningInfo.phaseId === phaseId) {
+    return "is-current";
+  }
+  if (normalizedStatus === "in_progress") {
+    return "is-current";
+  }
+  if (normalizedStatus === "completed") {
+    return "is-complete";
+  }
+  return "is-pending";
 }
 
 function ForgeTemplatesModal({
@@ -304,6 +340,7 @@ export function Forge({
   const installTemplate = client.installTemplate;
   const uninstallTemplate = client.uninstallTemplate;
   const listPlans = plansApi.listPlans;
+  const loadPhaseView = plansApi.loadPhaseView ?? forgeLoadPhaseView;
   const getPlanPrompt = plansApi.getPlanPrompt;
   const prepareExecution = plansApi.prepareExecution;
   const resetExecutionProgress = plansApi.resetExecutionProgress;
@@ -502,6 +539,7 @@ export function Forge({
   const selectedPlan = selectedPlanId
     ? plans.find((p) => p.id === selectedPlanId) ?? null
     : null;
+  const [phaseView, setPhaseView] = useState<ForgePhaseView>(EMPTY_PHASE_VIEW);
 
   const [planMenuOpen, setPlanMenuOpen] = useState(false);
   const planMenuRef = useRef<HTMLDivElement | null>(null);
@@ -522,6 +560,49 @@ export function Forge({
       setSelectedPlanId(null);
     }
   }, [plans, selectedPlanId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeWorkspaceId || !selectedPlanId) {
+      setPhaseView(EMPTY_PHASE_VIEW);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const installedTemplateId = installedTemplate?.installedTemplateId ?? null;
+    const refreshPhaseView = async () => {
+      try {
+        const next = await loadPhaseView(
+          activeWorkspaceId,
+          selectedPlanId,
+          installedTemplateId,
+        );
+        if (cancelled) {
+          return;
+        }
+        setPhaseView(next);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.warn("Failed to load Forge phase view.", { error });
+        setPhaseView(EMPTY_PHASE_VIEW);
+      }
+    };
+
+    void refreshPhaseView();
+    const interval = window.setInterval(refreshPhaseView, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [
+    activeWorkspaceId,
+    installedTemplate?.installedTemplateId,
+    loadPhaseView,
+    selectedPlanId,
+  ]);
 
   const executionMode = useMemo(() => {
     const mode =
@@ -804,6 +885,7 @@ export function Forge({
                 const isCompleted = effectiveStatus === "completed";
                 const isRunning = effectiveStatus === "inProgress";
                 const isActivePhase = isActiveTask && runningInfo?.phaseId;
+                const taskPhaseStatuses = phaseView.taskPhaseStatusByTaskId[item.id] ?? {};
 
                 return (
                   <li key={`${item.id}-${item.title}-${index}`} className={`forge-item ${effectiveStatus}`}>
@@ -824,6 +906,31 @@ export function Forge({
                         </span>
                       ) : null}
                     </div>
+                    {phaseView.phases.length > 0 ? (
+                      <div className="forge-phases">
+                        {phaseView.phases.map((phase) => {
+                          const chipState = mapForgePhaseChipState(
+                            item.id,
+                            phase.id,
+                            taskPhaseStatuses[phase.id] ?? "pending",
+                            runningInfo,
+                          );
+                          const iconUrl = getForgePhaseIconUrl(phase.iconId);
+                          return (
+                            <span
+                              key={`${item.id}-${phase.id}`}
+                              className={`forge-phase ${chipState}`}
+                              data-phase-id={phase.id}
+                            >
+                              <span className="forge-phase-icon" aria-hidden>
+                                <img src={iconUrl} alt="" aria-hidden />
+                              </span>
+                              <span className="forge-phase-name">{phase.title}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}
