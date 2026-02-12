@@ -622,6 +622,18 @@ mod tests {
     }
 
     #[test]
+    fn list_bundled_templates_includes_risk_adaptive_loop() {
+        let root = templates_root();
+        let list = list_bundled_templates_core(&root).expect("list bundled templates");
+        let risk_adaptive = list
+            .iter()
+            .find(|tpl| tpl.id == "risk-adaptive-loop")
+            .expect("risk-adaptive-loop template present");
+        assert_eq!(risk_adaptive.title, "Risk-Adaptive Loop");
+        assert_eq!(risk_adaptive.version, "0.1.0");
+    }
+
+    #[test]
     fn install_and_uninstall_ralph_loop_template() {
         let templates = templates_root();
         let workspace = temp_workspace_root();

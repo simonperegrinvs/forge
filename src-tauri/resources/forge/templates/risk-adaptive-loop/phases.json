@@ -1,0 +1,41 @@
+{
+  "schema": "forge-phases-v1",
+  "phases": [
+    {
+      "id": "risk-triage",
+      "title": "Risk Triage",
+      "iconId": "taskfile",
+      "order": 1,
+      "goal": "Classify change risk and choose the lightest safe implementation path.",
+      "description": "Map this task to low, medium, or high risk and capture why. Completion checks: (1) risk level is documented in task notes, (2) critical failure modes are listed, (3) acceptance criteria are mapped to verification, and (4) unnecessary work is explicitly deferred.",
+      "checks": []
+    },
+    {
+      "id": "focused-tests",
+      "title": "Focused Tests",
+      "iconId": "cucumber",
+      "order": 2,
+      "goal": "Create only the highest-signal tests needed for this task's risk profile.",
+      "description": "Add targeted tests that protect externally visible behavior and the highest-risk paths first. Completion checks: (1) tests cover acceptance criteria for this task, (2) assertions focus on behavior not internals, (3) test scope is proportional to risk level, and (4) flaky checks are removed or stabilized.",
+      "checks": []
+    },
+    {
+      "id": "implementation",
+      "title": "Implementation",
+      "iconId": "console",
+      "order": 3,
+      "goal": "Implement the minimal production change needed to satisfy focused tests.",
+      "description": "Apply constrained code changes and keep scope tight to the task intent. Completion checks: (1) task-targeted tests pass, (2) touched files align with plan scope, (3) notes capture key decisions and tradeoffs, and (4) no known regressions are introduced.",
+      "checks": []
+    },
+    {
+      "id": "review-gate",
+      "title": "Review Gate",
+      "iconId": "folder-review",
+      "order": 4,
+      "goal": "Run a final quality gate and block completion until critical findings are resolved.",
+      "description": "Perform final review and verification with risk-appropriate depth. Completion checks: (1) final checks are rerun on latest changes, (2) unresolved critical findings are zero, (3) follow-up non-critical findings are documented in notes, and (4) only then mark this phase completed.",
+      "checks": []
+    }
+  ]
+}
