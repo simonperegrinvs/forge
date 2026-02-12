@@ -47,6 +47,7 @@ import {
   forgeInstallTemplate,
   forgeListBundledTemplates,
   forgeListPlans,
+  forgeLoadPhaseView,
   forgeUninstallTemplate,
 } from "./tauri";
 
@@ -213,6 +214,134 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("forge_list_plans", { workspaceId: "ws-1" });
     expect(invokeMock).toHaveBeenCalledWith("forge_get_plan_prompt", { workspaceId: "ws-1" });
+  });
+
+  it("loads forge phase view from state and template phases files", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === "is_macos_debug_build") {
+        return false;
+      }
+      if (command !== "read_workspace_file") {
+        return undefined;
+      }
+
+      const path =
+        typeof args === "object" && args !== null && "path" in args
+          ? (args as { path?: unknown }).path
+          : undefined;
+      if (path === "plans/alpha/state.json") {
+        return {
+          content: JSON.stringify({
+            tasks: [
+              {
+                id: "task-1",
+                phases: [
+                  { id: "implementation", status: " COMPLETED " },
+                  { id: "verification", status: "unknown-value" },
+                ],
+              },
+            ],
+          }),
+          truncated: false,
+        };
+      }
+      if (path === ".agent/templates/test-first-loop/phases.json") {
+        return {
+          content: JSON.stringify({
+            schema: "forge-phases-v1",
+            phases: [
+              { id: "verification", title: "Verification", iconId: "fact_check", order: 2 },
+              { id: "implementation", title: "Implementation", iconId: "code_blocks", order: 1 },
+            ],
+          }),
+          truncated: false,
+        };
+      }
+
+      throw new Error(`unexpected path: ${String(path)}`);
+    });
+
+    await expect(forgeLoadPhaseView("ws-1", "alpha", "test-first-loop")).resolves.toEqual({
+      phases: [
+        { id: "implementation", title: "Implementation", iconId: "code_blocks", order: 1 },
+        { id: "verification", title: "Verification", iconId: "fact_check", order: 2 },
+      ],
+      taskPhaseStatusByTaskId: {
+        "task-1": {
+          implementation: "completed",
+          verification: "pending",
+        },
+      },
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("read_workspace_file", {
+      workspaceId: "ws-1",
+      path: "plans/alpha/state.json",
+    });
+    expect(invokeMock).toHaveBeenCalledWith("read_workspace_file", {
+      workspaceId: "ws-1",
+      path: ".agent/templates/test-first-loop/phases.json",
+    });
+  });
+
+  it("returns a safe fallback when forge phase-view files are malformed or truncated", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === "is_macos_debug_build") {
+        return false;
+      }
+      if (command !== "read_workspace_file") {
+        return undefined;
+      }
+
+      const path =
+        typeof args === "object" && args !== null && "path" in args
+          ? (args as { path?: unknown }).path
+          : undefined;
+      if (path === "plans/alpha/state.json") {
+        return { content: "{not-json", truncated: false };
+      }
+      if (path === ".agent/templates/test-first-loop/phases.json") {
+        return {
+          content: JSON.stringify({
+            schema: "forge-phases-v1",
+            phases: [{ id: "implementation", title: "Implementation", iconId: "code_blocks", order: 1 }],
+          }),
+          truncated: true,
+        };
+      }
+
+      throw new Error(`unexpected path: ${String(path)}`);
+    });
+
+    await expect(forgeLoadPhaseView("ws-1", "alpha", "test-first-loop")).resolves.toEqual({
+      phases: [],
+      taskPhaseStatusByTaskId: {},
+    });
+  });
+
+  it("returns a safe fallback when forge phase-view files are missing", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === "is_macos_debug_build") {
+        return false;
+      }
+      if (command === "read_workspace_file") {
+        throw new Error("missing");
+      }
+      return undefined;
+    });
+
+    await expect(forgeLoadPhaseView("ws-1", "alpha", null)).resolves.toEqual({
+      phases: [],
+      taskPhaseStatusByTaskId: {},
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("read_workspace_file", {
+      workspaceId: "ws-1",
+      path: "plans/alpha/state.json",
+    });
   });
 
   it("returns fallbacks for forge wrappers when Tauri invoke bridge is missing", async () => {

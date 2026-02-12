@@ -1011,6 +1011,190 @@ export type ForgeRunPhaseChecksResponse = {
   results: ForgePhaseCheckResult[];
 };
 
+export type ForgePhaseViewStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "blocked"
+  | "failed";
+
+export type ForgePhaseViewMetadata = {
+  id: string;
+  title: string;
+  iconId: string;
+  order: number;
+};
+
+export type ForgePhaseView = {
+  phases: ForgePhaseViewMetadata[];
+  taskPhaseStatusByTaskId: Record<string, Record<string, ForgePhaseViewStatus>>;
+};
+
+const EMPTY_FORGE_PHASE_VIEW: ForgePhaseView = {
+  phases: [],
+  taskPhaseStatusByTaskId: {},
+};
+
+const DEFAULT_FORGE_PHASE_ICON_ID = "check_circle";
+
+function normalizeForgePhaseViewStatus(value: unknown): ForgePhaseViewStatus {
+  if (typeof value !== "string") {
+    return "pending";
+  }
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === "pending" ||
+    normalized === "in_progress" ||
+    normalized === "completed" ||
+    normalized === "blocked" ||
+    normalized === "failed"
+  ) {
+    return normalized;
+  }
+  return "pending";
+}
+
+function parseForgeStatePhaseStatuses(
+  value: unknown,
+): Record<string, Record<string, ForgePhaseViewStatus>> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const tasks = (value as { tasks?: unknown }).tasks;
+  if (!Array.isArray(tasks)) {
+    return {};
+  }
+  const taskPhaseStatusByTaskId: Record<string, Record<string, ForgePhaseViewStatus>> = {};
+
+  for (const taskValue of tasks) {
+    if (!taskValue || typeof taskValue !== "object") {
+      continue;
+    }
+    const taskIdRaw = (taskValue as { id?: unknown }).id;
+    if (typeof taskIdRaw !== "string") {
+      continue;
+    }
+    const taskId = taskIdRaw.trim();
+    if (!taskId) {
+      continue;
+    }
+
+    const phases = (taskValue as { phases?: unknown }).phases;
+    if (!Array.isArray(phases)) {
+      continue;
+    }
+
+    const phaseStatusById: Record<string, ForgePhaseViewStatus> = {};
+    for (const phaseValue of phases) {
+      if (!phaseValue || typeof phaseValue !== "object") {
+        continue;
+      }
+      const phaseIdRaw = (phaseValue as { id?: unknown }).id;
+      if (typeof phaseIdRaw !== "string") {
+        continue;
+      }
+      const phaseId = phaseIdRaw.trim();
+      if (!phaseId) {
+        continue;
+      }
+      phaseStatusById[phaseId] = normalizeForgePhaseViewStatus(
+        (phaseValue as { status?: unknown }).status,
+      );
+    }
+
+    if (Object.keys(phaseStatusById).length > 0) {
+      taskPhaseStatusByTaskId[taskId] = phaseStatusById;
+    }
+  }
+
+  return taskPhaseStatusByTaskId;
+}
+
+function parseForgePhaseMetadata(value: unknown): ForgePhaseViewMetadata[] {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  const phases = (value as { phases?: unknown }).phases;
+  if (!Array.isArray(phases)) {
+    return [];
+  }
+
+  const parsed = phases
+    .map((phaseValue, index): ForgePhaseViewMetadata | null => {
+      if (!phaseValue || typeof phaseValue !== "object") {
+        return null;
+      }
+      const phaseIdRaw = (phaseValue as { id?: unknown }).id;
+      if (typeof phaseIdRaw !== "string") {
+        return null;
+      }
+      const id = phaseIdRaw.trim();
+      if (!id) {
+        return null;
+      }
+
+      const titleRaw = (phaseValue as { title?: unknown }).title;
+      const iconIdRaw = (phaseValue as { iconId?: unknown }).iconId;
+      const orderRaw = (phaseValue as { order?: unknown }).order;
+
+      const title = typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim() : id;
+      const iconId =
+        typeof iconIdRaw === "string" && iconIdRaw.trim()
+          ? iconIdRaw.trim()
+          : DEFAULT_FORGE_PHASE_ICON_ID;
+      const order =
+        typeof orderRaw === "number" && Number.isFinite(orderRaw) ? orderRaw : index + 1;
+
+      return { id, title, iconId, order };
+    })
+    .filter((phase): phase is ForgePhaseViewMetadata => Boolean(phase));
+
+  parsed.sort((a, b) => a.order - b.order);
+  return parsed;
+}
+
+async function readWorkspaceJsonValue(
+  workspaceId: string,
+  path: string,
+): Promise<unknown | null> {
+  try {
+    const response = await readWorkspaceFile(workspaceId, path);
+    if (response.truncated) {
+      return null;
+    }
+    return JSON.parse(response.content);
+  } catch {
+    return null;
+  }
+}
+
+export async function forgeLoadPhaseView(
+  workspaceId: string,
+  planId: string,
+  installedTemplateId: string | null,
+): Promise<ForgePhaseView> {
+  const normalizedPlanId = planId.trim();
+  if (!normalizedPlanId) {
+    return EMPTY_FORGE_PHASE_VIEW;
+  }
+
+  const normalizedTemplateId = installedTemplateId?.trim() ?? "";
+  const statePath = `plans/${normalizedPlanId}/state.json`;
+  const phasesPath = normalizedTemplateId
+    ? `.agent/templates/${normalizedTemplateId}/phases.json`
+    : null;
+
+  const [stateJson, phasesJson] = await Promise.all([
+    readWorkspaceJsonValue(workspaceId, statePath),
+    phasesPath ? readWorkspaceJsonValue(workspaceId, phasesPath) : Promise.resolve(null),
+  ]);
+
+  return {
+    phases: parseForgePhaseMetadata(phasesJson),
+    taskPhaseStatusByTaskId: parseForgeStatePhaseStatuses(stateJson),
+  };
+}
+
 export async function forgeListBundledTemplates(): Promise<ForgeBundledTemplateInfo[]> {
   try {
     return await invoke<ForgeBundledTemplateInfo[]>("forge_list_bundled_templates");
