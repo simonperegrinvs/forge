@@ -321,6 +321,50 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("keeps failed phase statuses from state for downstream blocking UI", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === "is_macos_debug_build") {
+        return false;
+      }
+      if (command !== "read_workspace_file") {
+        return undefined;
+      }
+
+      const path =
+        typeof args === "object" && args !== null && "path" in args
+          ? (args as { path?: unknown }).path
+          : undefined;
+      if (path === "plans/alpha/state.json") {
+        return {
+          content: JSON.stringify({
+            tasks: [
+              {
+                id: "task-1",
+                phases: [
+                  { id: "ai-review", status: "failed" },
+                  { id: "documentation", status: "blocked" },
+                ],
+              },
+            ],
+          }),
+          truncated: false,
+        };
+      }
+      throw new Error(`unexpected path: ${String(path)}`);
+    });
+
+    await expect(forgeLoadPhaseView("ws-1", "alpha", null)).resolves.toEqual({
+      phases: [],
+      taskPhaseStatusByTaskId: {
+        "task-1": {
+          "ai-review": "failed",
+          documentation: "blocked",
+        },
+      },
+    });
+  });
+
   it("returns a safe fallback when forge phase-view files are missing", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockImplementation(async (command: string) => {

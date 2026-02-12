@@ -8,15 +8,15 @@ const MATERIAL_ICONS_BASE_URL = "/assets/material-icons";
 const DEFAULT_FORGE_PHASE_ICON_ID: MaterialIcon = "file";
 const forgePhaseIconUrlCache = new Map<string, string>();
 
-function resolveForgePhaseIconId(iconId: string): MaterialIcon {
-  const normalized = iconId.trim();
-  if (isMaterialIconName(normalized)) {
+function resolveForgePhaseIconId(iconId: string | null | undefined): MaterialIcon {
+  const normalized = typeof iconId === "string" ? iconId.trim() : "";
+  if (normalized && isMaterialIconName(normalized)) {
     return normalized;
   }
   return DEFAULT_FORGE_PHASE_ICON_ID;
 }
 
-export function getForgePhaseIconUrl(iconId: string): string {
+export function getForgePhaseIconUrl(iconId: string | null | undefined): string {
   const resolvedIconId = resolveForgePhaseIconId(iconId);
   const cached = forgePhaseIconUrlCache.get(resolvedIconId);
   if (cached) {
