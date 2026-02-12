@@ -68,6 +68,11 @@ Execution UI rendering behavior:
   - running phase or `in_progress` -> `is-current`
   - `completed` -> `is-complete`
   - `pending` / `blocked` / `failed` -> `is-pending`
+- Forge sidebar panel project gate (`src/features/forge/components/Forge.tsx` + `src/features/app/components/Sidebar.tsx`):
+  - Forge panel can be opened from the sidebar header even when no workspace is active.
+  - If `activeWorkspaceId` is null/blank, Forge renders blocker copy `Select a project first to use Forge.`.
+  - In no-project mode, these controls are disabled and blocked from backend side effects: `Open templates`, plan selector, `Resume plan`, and `Clean progress`.
+  - Plan menu actions (`New plan...`, `Other...`) are not reachable while blocked, and no-project control clicks do not call `connectWorkspace`, `startThread`, or `sendUserMessage`.
 - `src/utils/forgePhaseIcons.ts::getForgePhaseIconUrl` validates icon ids with `isMaterialIconName` and resolves URLs with `getIconUrlByName(id, "/assets/material-icons")`.
 - Invalid/empty icon ids fall back to safe icon id `file` (`/assets/material-icons/file.svg`).
 
@@ -156,6 +161,10 @@ The `ai-review` phase is terminal and is treated as a hard gate for task complet
 
 Current regression coverage for this behavior spans frontend, template hooks, and shared Rust execution core:
 
+- Frontend project-gate behavior:
+  - `src/features/app/components/Sidebar.test.tsx`
+  - `src/features/forge/components/Forge.plans.test.tsx`
+  - Covers no-project blocker copy, disabled Forge controls, blocked menu reachability, no backend calls in blocked mode, and unchanged sidebar Forge open/close toggling.
 - Frontend execution chip rendering:
   - `src/features/forge/components/Forge.plans.test.tsx`
   - Covers template-order chip rendering, class-state mapping, icon URL fallback, and terminal `ai-review` staying non-completed/visibly blocking.
@@ -171,6 +180,12 @@ Current regression coverage for this behavior spans frontend, template hooks, an
 - Shared execution core:
   - `src-tauri/src/shared/forge_execute_core.rs` tests under `forge_execute_core::tests`
   - Covers partial progression, non-final no-commit success, final `ai-review` failure blocking completion, and final `ai-review` success commit gating.
+
+Task-local validation commands for project-gate behavior:
+
+- `npm run test -- src/features/forge/components/Forge.plans.test.tsx src/features/app/components/Sidebar.test.tsx`
+- `npm run test -- --coverage --coverage.include=src/features/forge/components/Forge.tsx src/features/forge/components/Forge.plans.test.tsx`
+- `npm run typecheck`
 
 ## Workspace Artifacts Created by Install
 

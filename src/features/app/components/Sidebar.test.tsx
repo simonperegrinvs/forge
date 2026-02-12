@@ -72,7 +72,7 @@ const baseProps = {
 };
 
 describe("Sidebar", () => {
-  it("toggles Forge panel from the header anvil icon", () => {
+  it("toggles Forge panel from the header anvil icon and shows no-project blocker state", () => {
     render(<Sidebar {...baseProps} />);
 
     expect(screen.queryByText("Forge")).toBeNull();
@@ -81,11 +81,21 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
 
     expect(screen.getByText("Forge")).toBeTruthy();
-    expect(screen.getByText("Click to select")).toBeTruthy();
+    expect(screen.getByText(/Select a project first to use Forge/i)).toBeTruthy();
     expect(screen.queryByText("Add a workspace to start.")).toBeNull();
 
+    const templateButton = screen.getByRole("button", { name: "Open templates" });
+    expect(templateButton.hasAttribute("disabled")).toBe(true);
+    const planSelectButton = screen.getByRole("button", { name: /Click to select/i });
+    expect(planSelectButton.hasAttribute("disabled")).toBe(true);
     const runButton = screen.getByRole("button", { name: "Resume plan" });
     expect(runButton.hasAttribute("disabled")).toBe(true);
+    const cleanProgressButton = screen.getByRole("button", { name: "Clean progress" });
+    expect(cleanProgressButton.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
+    expect(screen.queryByText("Forge")).toBeNull();
+    expect(screen.getByText("Add a workspace to start.")).toBeTruthy();
   });
 
   it("closes Forge when the search toggle is activated", () => {
@@ -99,15 +109,15 @@ describe("Sidebar", () => {
     expect(screen.getByLabelText("Search projects")).toBeTruthy();
   });
 
-  it("shows Forge plan menu actions", () => {
+  it("does not show Forge plan menu actions when no project is selected", () => {
     render(<Sidebar {...baseProps} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle Forge" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Click to select/i }));
 
-    expect(screen.getByText("Other...")).toBeTruthy();
-    expect(screen.getByText("New plan...")).toBeTruthy();
+    expect(screen.queryByText("Other...")).toBeNull();
+    expect(screen.queryByText("New plan...")).toBeNull();
   });
 
   it("toggles the search bar from the header icon", () => {

@@ -22,6 +22,272 @@ const templatesClient: ForgeTemplatesClient = {
 };
 
 describe("Forge plans", () => {
+  it("opens templates modal, supports swap/remove actions, and closes on escape", async () => {
+    const installTemplate = vi.fn(async () => ({
+      schema: "forge-template-lock-v1",
+      installedTemplateId: "tpl-beta",
+      installedTemplateVersion: "2.0.0",
+      installedAtIso: "2026-02-12T00:00:00.000Z",
+      installedFiles: [],
+    }));
+    const uninstallTemplate = vi.fn(async () => {});
+    const templatesClientWithInstall: ForgeTemplatesClient = {
+      listBundledTemplates: async () => [
+        { id: "tpl-alpha", title: "Alpha Template", version: "1.0.0" },
+        { id: "tpl-beta", title: "Beta Template", version: "2.0.0" },
+      ],
+      getInstalledTemplate: async () => ({
+        schema: "forge-template-lock-v1",
+        installedTemplateId: "tpl-alpha",
+        installedTemplateVersion: "1.0.0",
+        installedAtIso: "2026-02-12T00:00:00.000Z",
+        installedFiles: [],
+      }),
+      installTemplate,
+      uninstallTemplate,
+    };
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClientWithInstall}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open templates" }));
+    expect(await screen.findByText("Templates")).toBeTruthy();
+    expect(screen.getByText("Alpha Template")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Swap" }));
+
+    await waitFor(() => expect(installTemplate).toHaveBeenCalledWith("ws-1", "tpl-beta"));
+    await waitFor(() => expect(screen.queryByText("Templates")).toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: "Open templates" }));
+    await waitFor(() => expect(screen.getByText("Beta Template")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(uninstallTemplate).toHaveBeenCalledWith("ws-1"));
+    await waitFor(() => expect(screen.queryByText("Templates")).toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: "Open templates" }));
+    await waitFor(() => expect(screen.getByText("Templates")).toBeTruthy());
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByText("Templates")).toBeNull());
+  });
+
+  it("renders unknown installed template fallback text when lock is not in bundled list", async () => {
+    const templatesClientWithUnknownInstall: ForgeTemplatesClient = {
+      listBundledTemplates: async () => [
+        { id: "tpl-known", title: "Known Template", version: "1.0.0" },
+      ],
+      getInstalledTemplate: async () => ({
+        schema: "forge-template-lock-v1",
+        installedTemplateId: "tpl-missing",
+        installedTemplateVersion: "9.9.9",
+        installedAtIso: "2026-02-12T00:00:00.000Z",
+        installedFiles: [],
+      }),
+      installTemplate: async () => {
+        throw new Error("unexpected install");
+      },
+      uninstallTemplate: async () => {},
+    };
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClientWithUnknownInstall}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open templates" }));
+    expect(await screen.findByText("tpl-missing")).toBeTruthy();
+    expect(screen.getByText("Installed (9.9.9)")).toBeTruthy();
+  });
+
+  it("shows a no-project blocker and disables Forge controls when no workspace is selected", async () => {
+    const listPlans = vi.fn<ForgePlansClient["listPlans"]>().mockResolvedValue([]);
+    const plansClient: ForgePlansClient = {
+      listPlans,
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId={null}
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    expect(
+      await screen.findByText(/Select a project first to use Forge/i),
+    ).toBeTruthy();
+
+    const templatesButton = screen.getByRole("button", { name: "Open templates" });
+    expect(templatesButton.hasAttribute("disabled")).toBe(true);
+    const planSelectButton = screen.getByRole("button", { name: /Click to select/i });
+    expect(planSelectButton.hasAttribute("disabled")).toBe(true);
+    const runButton = screen.getByRole("button", { name: "Resume plan" });
+    expect(runButton.hasAttribute("disabled")).toBe(true);
+    const cleanProgressButton = screen.getByRole("button", { name: "Clean progress" });
+    expect(cleanProgressButton.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(planSelectButton);
+    expect(screen.queryByText("New plan...")).toBeNull();
+    expect(screen.queryByText("Other...")).toBeNull();
+    expect(listPlans).not.toHaveBeenCalled();
+  });
+
+  it("never calls connect/start/send plan backends in no-project mode", async () => {
+    const connectWorkspace = vi.fn(async () => {});
+    const startThread = vi.fn(async () => ({ result: { thread: { id: "thread-1" } } }));
+    const sendUserMessage = vi.fn(async () => ({}));
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace,
+      startThread,
+      sendUserMessage,
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId={null}
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    const planSelectButton = screen.getByRole("button", { name: /Click to select/i });
+    fireEvent.click(planSelectButton);
+    const newPlanAction = screen.queryByText("New plan...");
+    if (newPlanAction) {
+      fireEvent.click(newPlanAction);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Resume plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clean progress" }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(connectWorkspace).not.toHaveBeenCalled();
+    expect(startThread).not.toHaveBeenCalled();
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps no-project invariants under deterministic random click sequences", async () => {
+    const connectWorkspace = vi.fn(async () => {});
+    const startThread = vi.fn(async () => ({ result: { thread: { id: "thread-1" } } }));
+    const sendUserMessage = vi.fn(async () => ({}));
+
+    const plansClient: ForgePlansClient = {
+      listPlans: async () => [],
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace,
+      startThread,
+      sendUserMessage,
+    };
+
+    render(
+      <Forge
+        activeWorkspaceId={null}
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    const controls = () => ({
+      templates: screen.getByRole("button", { name: "Open templates" }),
+      planSelect: screen.getByRole("button", { name: /Click to select/i }),
+      run: screen.getByRole("button", { name: "Resume plan" }),
+      clean: screen.getByRole("button", { name: "Clean progress" }),
+    });
+
+    let seed = 1337;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+
+    const actions = [
+      () => fireEvent.click(controls().templates),
+      () => fireEvent.click(controls().planSelect),
+      () => fireEvent.click(controls().run),
+      () => fireEvent.click(controls().clean),
+    ];
+
+    for (let i = 0; i < 64; i += 1) {
+      await act(async () => {
+        actions[next() % actions.length]();
+      });
+      expect(screen.getByText(/Select a project first to use Forge/i)).toBeTruthy();
+      expect(screen.queryByText("New plan...")).toBeNull();
+      expect(screen.queryByText("Templates")).toBeNull();
+    }
+
+    expect(connectWorkspace).not.toHaveBeenCalled();
+    expect(startThread).not.toHaveBeenCalled();
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
   it("lists workspace plans and enables the execute toggle after selecting one", async () => {
     const getNextPhasePrompt = vi
       .fn<ForgePlansClient["getNextPhasePrompt"]>()

@@ -351,6 +351,7 @@ export function Forge({
   const connectWorkspaceToRun = plansApi.connectWorkspace;
   const startThreadForPlan = plansApi.startThread;
   const sendUserMessageToPlanThread = plansApi.sendUserMessage;
+  const hasActiveWorkspace = Boolean(activeWorkspaceId?.trim());
 
   const findCollaborationMode = useCallback(
     (wanted: string) => {
@@ -551,6 +552,13 @@ export function Forge({
     containerRef: planMenuRef,
     onClose: () => setPlanMenuOpen(false),
   });
+
+  useEffect(() => {
+    if (hasActiveWorkspace) {
+      return;
+    }
+    setPlanMenuOpen(false);
+  }, [hasActiveWorkspace]);
 
   useEffect(() => {
     if (!selectedPlanId) {
@@ -755,6 +763,7 @@ export function Forge({
             title="Templates"
             data-tauri-drag-region="false"
             onClick={() => setTemplatesOpen(true)}
+            disabled={!hasActiveWorkspace}
           >
             <LayoutTemplate aria-hidden />
           </button>
@@ -762,9 +771,15 @@ export function Forge({
             type="button"
             className={`ghost forge-plan-toggle${planMenuOpen ? " is-open" : ""}`}
             data-tauri-drag-region="false"
-            onClick={() => setPlanMenuOpen((open) => !open)}
+            onClick={() => {
+              if (!hasActiveWorkspace) {
+                return;
+              }
+              setPlanMenuOpen((open) => !open);
+            }}
             aria-haspopup="menu"
             aria-expanded={planMenuOpen}
+            disabled={!hasActiveWorkspace}
           >
             <span className={selectedPlan ? "forge-plan-name" : "forge-plan-empty"}>
               {selectedPlan ? selectedPlan.name : "Click to select"}
@@ -827,18 +842,20 @@ export function Forge({
               type="button"
               className="ghost forge-execute-toggle"
               data-tauri-drag-region="false"
-              disabled={!selectedPlan}
+              disabled={!hasActiveWorkspace || !selectedPlan}
               aria-label={isExecuting ? "Pause plan" : "Resume plan"}
               aria-pressed={isExecuting}
               title={
-                !selectedPlan
+                !hasActiveWorkspace
+                  ? "Select a project to use Forge"
+                  : !selectedPlan
                   ? "Select a plan to run"
                   : isExecuting
                     ? "Pause plan"
                     : "Resume plan"
               }
               onClick={() => {
-                if (!selectedPlan) {
+                if (!hasActiveWorkspace || !selectedPlan) {
                   return;
                 }
                 if (isExecuting) {
@@ -854,10 +871,12 @@ export function Forge({
               type="button"
               className="ghost forge-reset-progress"
               data-tauri-drag-region="false"
-              disabled={!selectedPlan || isResettingProgress}
+              disabled={!hasActiveWorkspace || !selectedPlan || isResettingProgress}
               aria-label="Clean progress"
               title={
-                !selectedPlan
+                !hasActiveWorkspace
+                  ? "Select a project to use Forge"
+                  : !selectedPlan
                   ? "Select a plan to clean progress"
                   : "Reset state and derived execution files"
               }
@@ -875,7 +894,11 @@ export function Forge({
               {lastError}
             </div>
           ) : null}
-          {selectedPlan ? (
+          {!hasActiveWorkspace ? (
+            <div className="forge-empty">
+              Select a project first to use Forge.
+            </div>
+          ) : selectedPlan ? (
             <ol className="forge-items">
               {selectedPlan.items.map((item, index) => {
                 const isActiveTask = runningInfo?.taskId === item.id;
