@@ -40,6 +40,37 @@ Notes:
 - In remote mode, each app handler calls `remote_backend::call_remote`; daemon `rpc.rs` parses the same camelCase keys with `parse_string`.
 - `remote_backend::can_retry_after_disconnect` includes all Forge methods above, so disconnect errors are retried once after reconnect.
 
+## UI Phase Metadata and Icon Resolution
+
+Forge execution chips use a frontend-composed phase-view model rather than a dedicated `forge_*` backend command:
+
+- Loader: `src/services/tauri.ts::forgeLoadPhaseView`
+- File reads (via `read_workspace_file`):
+  - `plans/<planId>/state.json`
+  - `.agent/templates/<installedTemplateId>/phases.json` (when a template is installed)
+
+`forgeLoadPhaseView` behavior:
+
+- Missing, malformed, or truncated files are treated as non-fatal and return empty phase metadata/status maps.
+- State phase statuses are normalized to:
+  - `pending`
+  - `in_progress`
+  - `completed`
+  - `blocked`
+  - `failed`
+- Unknown statuses normalize to `pending`.
+- Template phase metadata is sorted by `order` (fallback: array index + 1).
+- Missing/blank `iconId` metadata falls back to `check_circle` during metadata parsing.
+
+Execution UI rendering behavior:
+
+- `src/features/forge/components/Forge.tsx::mapForgePhaseChipState` maps states as:
+  - running phase or `in_progress` -> `is-current`
+  - `completed` -> `is-complete`
+  - `pending` / `blocked` / `failed` -> `is-pending`
+- `src/utils/forgePhaseIcons.ts::getForgePhaseIconUrl` validates icon ids with `isMaterialIconName` and resolves URLs with `getIconUrlByName(id, "/assets/material-icons")`.
+- Invalid/empty icon ids fall back to safe icon id `file` (`/assets/material-icons/file.svg`).
+
 ## Local vs Remote Command Routing
 
 Each app handler in `src-tauri/src/forge/mod.rs` follows the same branch:
@@ -81,9 +112,10 @@ Bundled templates are stored under:
 
 Each template folder must contain `template.json` (read by `read_manifest` in `src-tauri/src/shared/forge_templates_core.rs`). `forge_list_bundled_templates` ignores folders that are missing or fail to parse `template.json`.
 
-Current bundled example:
+Current bundled templates:
 
 - `src-tauri/resources/forge/templates/ralph-loop/template.json`
+- `src-tauri/resources/forge/templates/test-first-loop/template.json`
 
 `template.json` fields (schema `forge-template-v1`):
 
@@ -102,7 +134,43 @@ Current bundled example:
 - `entrypoints.hooks.preExecute`: hook script run by `forge_prepare_execution`/`forge_reset_execution_progress` before execution.
 - `entrypoints.hooks.postStep`: hook script run by `forge_get_next_phase_prompt` and `forge_run_phase_checks` to regenerate `plans/<plan_id>/execute-prompt.md`.
 
-`template.json` should also be included in `files` so installed templates at `.agent/templates/<id>/` remain self-describing (the bundled `ralph-loop` template does this).
+`template.json` should also be included in `files` so installed templates at `.agent/templates/<id>/` remain self-describing (both bundled templates do this).
+
+## `test-first-loop` Phase Contract (6 Phases)
+
+`src-tauri/resources/forge/templates/test-first-loop/phases.json` defines six ordered phases:
+
+| Order | Phase id | Title | iconId | Completion contract highlights |
+| --- | --- | --- | --- | --- |
+| 1 | `test-case-mapping` | `Test Case Mapping` | `taskfile` | Requirement-to-test mapping, edge/failure paths, risk prioritization, assumptions documented |
+| 2 | `behavioral-tests` | `Behavioral Tests` | `cucumber` | Behavior-focused executable tests, fail-before/pass-after flow, outcome assertions, stabilized determinism |
+| 3 | `implementation` | `Implementation` | `console` | Minimal scoped code changes with passing targeted tests and recorded decisions |
+| 4 | `coverage-hardening` | `Coverage Hardening` | `codecov` | Fixed coverage floor of **80%**, explicit remaining risk gaps, property-based tests for high-risk gaps |
+| 5 | `documentation` | `Documentation` | `readme` | Canonical docs/runbooks updated to live behavior, obsolete guidance removed |
+| 6 | `ai-review` | `AI Review Gate` | `folder-review` | Zero-findings gate: any remaining finding keeps the phase non-completed (`failed` or `blocked`) and execution must stop |
+
+The `ai-review` phase is terminal and is treated as a hard gate for task completion.
+`forge_execute_core` only records task completion commit SHA on successful final-phase checks. When terminal `ai-review` checks fail, the phase remains non-completed and progression does not advance.
+
+## Regression Coverage Snapshot
+
+Current regression coverage for this behavior spans frontend, template hooks, and shared Rust execution core:
+
+- Frontend execution chip rendering:
+  - `src/features/forge/components/Forge.plans.test.tsx`
+  - Covers template-order chip rendering, class-state mapping, icon URL fallback, and terminal `ai-review` staying non-completed/visibly blocking.
+- Frontend icon resolver:
+  - `src/utils/forgePhaseIcons.test.ts`
+  - Covers valid icon URL resolution, invalid-id fallback to `file`, and whitespace-trimmed valid ids.
+- Frontend phase-view loader:
+  - `src/services/tauri.test.ts`
+  - Covers `forgeLoadPhaseView` parsing/fallbacks plus normalization/preservation of `blocked` and `failed` statuses.
+- Template hook behavior:
+  - `src/features/forge/scripts/testFirstLoopScripts.test.ts`
+  - Covers six-phase initialization and post-step selection of first non-completed phase, including `ai-review`.
+- Shared execution core:
+  - `src-tauri/src/shared/forge_execute_core.rs` tests under `forge_execute_core::tests`
+  - Covers partial progression, non-final no-commit success, final `ai-review` failure blocking completion, and final `ai-review` success commit gating.
 
 ## Workspace Artifacts Created by Install
 
