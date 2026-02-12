@@ -242,6 +242,173 @@ pub(super) async fn try_handle(
             };
             Some(serde_json::to_value(response).map_err(|err| err.to_string()))
         }
+        "forge_list_bundled_templates" => {
+            let templates = match state.forge_list_bundled_templates().await {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(serde_json::to_value(templates).map_err(|err| err.to_string()))
+        }
+        "forge_get_installed_template" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let template = match state.forge_get_installed_template(workspace_id).await {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(serde_json::to_value(template).map_err(|err| err.to_string()))
+        }
+        "forge_install_template" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let template_id = match parse_string(params, "templateId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let lock = match state.forge_install_template(workspace_id, template_id).await {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(serde_json::to_value(lock).map_err(|err| err.to_string()))
+        }
+        "forge_uninstall_template" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .forge_uninstall_template(workspace_id)
+                    .await
+                    .map(|_| json!({ "ok": true })),
+            )
+        }
+        "forge_list_plans" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let plans = match state.forge_list_plans(workspace_id).await {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(serde_json::to_value(plans).map_err(|err| err.to_string()))
+        }
+        "forge_get_plan_prompt" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .forge_get_plan_prompt(workspace_id)
+                    .await
+                    .map(Value::String),
+            )
+        }
+        "forge_prepare_execution" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let plan_id = match parse_string(params, "planId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .forge_prepare_execution(workspace_id, plan_id)
+                    .await
+                    .map(|_| json!({ "ok": true })),
+            )
+        }
+        "forge_reset_execution_progress" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let plan_id = match parse_string(params, "planId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .forge_reset_execution_progress(workspace_id, plan_id)
+                    .await
+                    .map(|_| json!({ "ok": true })),
+            )
+        }
+        "forge_get_next_phase_prompt" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let plan_id = match parse_string(params, "planId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let next = match state.forge_get_next_phase_prompt(workspace_id, plan_id).await {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(serde_json::to_value(next).map_err(|err| err.to_string()))
+        }
+        "forge_get_phase_status" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let plan_id = match parse_string(params, "planId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let task_id = match parse_string(params, "taskId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let phase_id = match parse_string(params, "phaseId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let status = match state
+                .forge_get_phase_status(workspace_id, plan_id, task_id, phase_id)
+                .await
+            {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(serde_json::to_value(status).map_err(|err| err.to_string()))
+        }
+        "forge_run_phase_checks" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let plan_id = match parse_string(params, "planId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let task_id = match parse_string(params, "taskId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let phase_id = match parse_string(params, "phaseId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let result = match state
+                .forge_run_phase_checks(workspace_id, plan_id, task_id, phase_id)
+                .await
+            {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(serde_json::to_value(result).map_err(|err| err.to_string()))
+        }
         "file_read" => {
             let request = match parse_file_read_request(params) {
                 Ok(value) => value,

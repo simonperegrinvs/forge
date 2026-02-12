@@ -1760,6 +1760,61 @@ mod tests {
             let _ = std::fs::remove_dir_all(&tmp);
         });
     }
+
+    #[test]
+    fn rpc_forge_list_bundled_templates_routes_to_daemon_state() {
+        run_async_test(async {
+            let tmp = make_temp_dir("rpc-forge-list-bundled");
+            let state = test_state(&tmp);
+
+            let result = rpc::handle_rpc_request(
+                &state,
+                "forge_list_bundled_templates",
+                json!({}),
+                "daemon-test".to_string(),
+            )
+            .await
+            .expect("forge_list_bundled_templates should succeed");
+
+            let templates = result.as_array().expect("array result");
+            assert!(
+                templates.iter().any(|entry| {
+                    entry
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .is_some_and(|id| id == "ralph-loop")
+                }),
+                "expected forge_list_bundled_templates to include ralph-loop"
+            );
+            let _ = std::fs::remove_dir_all(&tmp);
+        });
+    }
+
+    #[test]
+    fn rpc_forge_list_plans_routes_to_workspace_handler() {
+        run_async_test(async {
+            let tmp = make_temp_dir("rpc-forge-list-plans");
+            let workspace_id = "ws-forge-plans";
+            let workspace_dir = tmp.join("workspace");
+            std::fs::create_dir_all(workspace_dir.join("plans")).expect("create workspace plans dir");
+
+            let state = test_state(&tmp);
+            insert_workspace(&state, workspace_id, &workspace_dir.to_string_lossy()).await;
+
+            let result = rpc::handle_rpc_request(
+                &state,
+                "forge_list_plans",
+                json!({ "workspaceId": workspace_id }),
+                "daemon-test".to_string(),
+            )
+            .await
+            .expect("forge_list_plans should succeed");
+
+            let plans = result.as_array().expect("array result");
+            assert!(plans.is_empty(), "expected no plans in empty plans directory");
+            let _ = std::fs::remove_dir_all(&tmp);
+        });
+    }
 }
 
 fn main() {
