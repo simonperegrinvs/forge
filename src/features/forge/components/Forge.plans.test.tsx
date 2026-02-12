@@ -641,6 +641,7 @@ describe("Forge plans", () => {
   });
 
   it("stops execution when a phase reports a terminal non-completed status", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const runPhaseChecks = vi.fn<ForgePlansClient["runPhaseChecks"]>().mockResolvedValue({
       ok: true,
       results: [],
@@ -693,7 +694,14 @@ describe("Forge plans", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toContain('terminal status "failed"'),
     );
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Forge execution failed.",
+      expect.objectContaining({
+        error: expect.any(Error),
+      }),
+    );
     expect(runPhaseChecks).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Resume plan" })).toBeTruthy();
+    warnSpy.mockRestore();
   });
 });
