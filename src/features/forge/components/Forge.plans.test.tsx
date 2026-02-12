@@ -410,6 +410,114 @@ describe("Forge plans", () => {
     expect(screen.getByRole("menuitemradio", { name: "Alpha (alpha)" })).toBeTruthy();
   });
 
+  it("ignores stale in-flight plan responses after workspace switch", async () => {
+    type Deferred<T> = {
+      promise: Promise<T>;
+      resolve: (value: T) => void;
+    };
+
+    function deferred<T>(): Deferred<T> {
+      let resolve: ((value: T) => void) | null = null;
+      const promise = new Promise<T>((innerResolve) => {
+        resolve = innerResolve;
+      });
+      return {
+        promise,
+        resolve: (value: T) => {
+          if (!resolve) {
+            throw new Error("deferred resolve not initialized");
+          }
+          resolve(value);
+        },
+      };
+    }
+
+    const ws1Plans = deferred<any[]>();
+    const listPlans = vi
+      .fn<ForgePlansClient["listPlans"]>()
+      .mockImplementation(async (workspaceId) => {
+        if (workspaceId === "ws-1") {
+          return ws1Plans.promise;
+        }
+        return [
+          {
+            id: "beta",
+            title: "Beta",
+            goal: "Beta goal",
+            tasks: [
+              {
+                id: "task-1",
+                name: "Task 1",
+                status: "pending",
+              },
+            ],
+            currentTaskId: null,
+            planPath: "plans/beta.json",
+            updatedAtMs: 0,
+          },
+        ];
+      });
+
+    const plansClient: ForgePlansClient = {
+      listPlans,
+      getPlanPrompt: async () => "",
+      prepareExecution: async () => {},
+      resetExecutionProgress: async () => {},
+      getNextPhasePrompt: async () => null,
+      getPhaseStatus: async () => ({ status: "pending", commitSha: null }),
+      runPhaseChecks: async () => ({ ok: true, results: [] }),
+      interruptTurn: async () => ({}),
+      connectWorkspace: async () => {},
+      startThread: async () => ({ result: { thread: { id: "thread-1" } } }),
+      sendUserMessage: async () => ({}),
+    };
+
+    const rendered = render(
+      <Forge
+        activeWorkspaceId="ws-1"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    rendered.rerender(
+      <Forge
+        activeWorkspaceId="ws-2"
+        templatesClient={templatesClient}
+        plansClient={plansClient}
+        collaborationModes={[]}
+      />,
+    );
+
+    ws1Plans.resolve([
+      {
+        id: "alpha",
+        title: "Alpha",
+        goal: "Alpha goal",
+        tasks: [
+          {
+            id: "task-1",
+            name: "Task 1",
+            status: "pending",
+          },
+        ],
+        currentTaskId: null,
+        planPath: "plans/alpha.json",
+        updatedAtMs: 0,
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(listPlans).toHaveBeenCalledWith("ws-1");
+      expect(listPlans).toHaveBeenCalledWith("ws-2");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Click to select/i }));
+    expect(screen.getByRole("menuitemradio", { name: "Beta (beta)" })).toBeTruthy();
+    expect(screen.queryByRole("menuitemradio", { name: "Alpha (alpha)" })).toBeNull();
+  });
+
   it("starts a new plan thread in plan mode and injects the plan prompt", async () => {
     const connectWorkspace = vi.fn(async () => {});
     const startThread = vi.fn(async () => ({ result: { thread: { id: "thread-123" } } }));

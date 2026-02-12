@@ -138,6 +138,8 @@ const EMPTY_PHASE_VIEW: ForgePhaseView = {
 
 type ForgePhaseChipState = "is-complete" | "is-current" | "is-pending";
 type ForgeRunningInfo = { taskId: string; phaseId: string } | null;
+const FORGE_PLANS_POLL_INTERVAL_MS = 2000;
+const FORGE_PHASE_VIEW_POLL_INTERVAL_MS = 2000;
 
 function formatPlanLabel(plan: ForgeWorkspacePlan): string {
   const title = plan.title?.trim() ?? "";
@@ -468,7 +470,14 @@ export function Forge({
   const [installedTemplate, setInstalledTemplate] = useState<ForgeTemplateLock | null>(null);
   const [workspacePlans, setWorkspacePlans] = useState<ForgeWorkspacePlan[]>([]);
   const [isResettingProgress, setIsResettingProgress] = useState(false);
-  const plansInFlightRef = useRef(false);
+  const plansInFlightRef = useRef<Set<string>>(new Set());
+  const plansRequestSeqRef = useRef(0);
+  const latestPlansRequestByWorkspaceRef = useRef<Map<string, number>>(new Map());
+  const activeWorkspaceIdRef = useRef<string | null>(activeWorkspaceId);
+
+  useEffect(() => {
+    activeWorkspaceIdRef.current = activeWorkspaceId;
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -513,17 +522,33 @@ export function Forge({
 
   const refreshPlans = useCallback(
     async (workspaceId: string) => {
-      if (plansInFlightRef.current) {
+      const normalizedWorkspaceId = workspaceId.trim();
+      if (!normalizedWorkspaceId) {
         return;
       }
-      plansInFlightRef.current = true;
+
+      const inFlight = plansInFlightRef.current;
+      if (inFlight.has(normalizedWorkspaceId)) {
+        return;
+      }
+      inFlight.add(normalizedWorkspaceId);
+
+      const requestId = plansRequestSeqRef.current + 1;
+      plansRequestSeqRef.current = requestId;
+      latestPlansRequestByWorkspaceRef.current.set(normalizedWorkspaceId, requestId);
+
       try {
-        const next = await listPlans(workspaceId);
+        const next = await listPlans(normalizedWorkspaceId);
+        const latestRequestId = latestPlansRequestByWorkspaceRef.current.get(normalizedWorkspaceId);
+        const latestWorkspaceId = (activeWorkspaceIdRef.current ?? "").trim();
+        if (latestRequestId !== requestId || latestWorkspaceId !== normalizedWorkspaceId) {
+          return;
+        }
         setWorkspacePlans(next);
       } catch (error) {
         console.warn("Failed to load Forge plans.", { error });
       } finally {
-        plansInFlightRef.current = false;
+        inFlight.delete(normalizedWorkspaceId);
       }
     },
     [listPlans],
@@ -533,6 +558,8 @@ export function Forge({
     let cancelled = false;
     if (!activeWorkspaceId) {
       setWorkspacePlans([]);
+      plansInFlightRef.current.clear();
+      latestPlansRequestByWorkspaceRef.current.clear();
       return () => {
         cancelled = true;
       };
@@ -546,7 +573,7 @@ export function Forge({
     };
 
     void loadPlans();
-    const interval = window.setInterval(loadPlans, 2000);
+    const interval = window.setInterval(loadPlans, FORGE_PLANS_POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -665,7 +692,7 @@ export function Forge({
     };
 
     void refreshPhaseView();
-    const interval = window.setInterval(refreshPhaseView, 2000);
+    const interval = window.setInterval(refreshPhaseView, FORGE_PHASE_VIEW_POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(interval);

@@ -274,7 +274,11 @@ pub(crate) fn sync_agent_skills_into_repo_agents_dir_core(workspace_root: &Path)
             .map_err(|_| "Invalid .agent/skills file path.".to_string())?;
         let dest_path = codex_skills_root.join(rel);
         if dest_path.exists() {
-            continue;
+            let src_contents = fs::read(&src_path).map_err(|err| err.to_string())?;
+            let dest_contents = fs::read(&dest_path).map_err(|err| err.to_string())?;
+            if src_contents == dest_contents {
+                continue;
+            }
         }
         copy_file(&src_path, &dest_path)?;
     }
@@ -503,6 +507,27 @@ mod tests {
         ensure_git_info_exclude_contains(&workspace, ".agent/").expect("exclude update again");
         let second = std::fs::read_to_string(&exclude_path).expect("read exclude again");
         assert_eq!(first, second);
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn sync_agent_skills_updates_existing_repo_skill_when_source_changes() {
+        let workspace = temp_workspace_root();
+        let source_path = workspace.join(".agent").join("skills").join("plan").join("SKILL.md");
+        let dest_path = workspace.join(".agents").join("skills").join("plan").join("SKILL.md");
+
+        std::fs::create_dir_all(source_path.parent().expect("source parent"))
+            .expect("create source parent");
+        std::fs::create_dir_all(dest_path.parent().expect("dest parent"))
+            .expect("create dest parent");
+
+        std::fs::write(&source_path, "new skill instructions\n").expect("write source");
+        std::fs::write(&dest_path, "stale skill instructions\n").expect("write destination");
+
+        sync_agent_skills_into_repo_agents_dir_core(&workspace).expect("sync skills");
+
+        let dest_contents = std::fs::read_to_string(&dest_path).expect("read destination");
+        assert_eq!(dest_contents, "new skill instructions\n");
         let _ = std::fs::remove_dir_all(&workspace);
     }
 

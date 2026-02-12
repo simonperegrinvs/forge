@@ -16,6 +16,7 @@ use crate::utils::{git_env_path, resolve_git_binary};
 const CHECK_TIMEOUT_SECONDS_DEFAULT: u64 = 10 * 60;
 const HOOK_TIMEOUT_SECONDS: u64 = 2 * 60;
 const GIT_COMMAND_TIMEOUT_SECONDS: u64 = 90;
+const AI_REVIEW_REPORT_SCHEMA: &str = "forge-ai-review-v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -649,6 +650,119 @@ async fn run_phase_check(workspace_root: &Path, check: &RunnablePhaseCheck) -> F
     }
 }
 
+fn run_ai_review_report_check(paths: &ForgeExecutionPaths, task_id: &str) -> ForgePhaseCheckResultV1 {
+    let start = Instant::now();
+    let report_path = paths
+        .plan_dir
+        .join("ai-review")
+        .join(format!("{task_id}.json"));
+
+    let failure = |stderr: String, duration_ms: i64| ForgePhaseCheckResultV1 {
+        id: "ai-review-report".to_string(),
+        title: "AI review report has zero findings".to_string(),
+        exit_code: 2,
+        duration_ms,
+        stdout: String::new(),
+        stderr,
+        timed_out: false,
+    };
+
+    if !report_path.is_file() {
+        return failure(
+            format!(
+                "Missing AI review report: {}. Expected JSON with findings: [].",
+                report_path.display()
+            ),
+            start.elapsed().as_millis() as i64,
+        );
+    }
+
+    let raw = match fs::read_to_string(&report_path) {
+        Ok(value) => value,
+        Err(err) => {
+            return failure(
+                format!("Failed to read AI review report {}: {err}", report_path.display()),
+                start.elapsed().as_millis() as i64,
+            )
+        }
+    };
+    let report: Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(err) => {
+            return failure(
+                format!("Invalid JSON in AI review report {}: {err}", report_path.display()),
+                start.elapsed().as_millis() as i64,
+            )
+        }
+    };
+
+    let schema = report
+        .get("schema")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    if schema != AI_REVIEW_REPORT_SCHEMA {
+        return failure(
+            format!(
+                "AI review report schema must be {AI_REVIEW_REPORT_SCHEMA} (got: {}).",
+                if schema.is_empty() { "<missing>" } else { schema }
+            ),
+            start.elapsed().as_millis() as i64,
+        );
+    }
+
+    let report_task_id = report
+        .get("taskId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    if report_task_id != task_id {
+        return failure(
+            format!(
+                "AI review report taskId mismatch (expected {task_id}, got {}).",
+                if report_task_id.is_empty() {
+                    "<missing>"
+                } else {
+                    report_task_id
+                }
+            ),
+            start.elapsed().as_millis() as i64,
+        );
+    }
+
+    let findings = match report.get("findings").and_then(Value::as_array) {
+        Some(value) => value,
+        None => {
+            return failure(
+                "AI review report must include a findings array.".to_string(),
+                start.elapsed().as_millis() as i64,
+            )
+        }
+    };
+    if !findings.is_empty() {
+        return failure(
+            format!(
+                "AI review report contains {} finding(s); resolve all findings before marking ai-review complete.",
+                findings.len()
+            ),
+            start.elapsed().as_millis() as i64,
+        );
+    }
+
+    ForgePhaseCheckResultV1 {
+        id: "ai-review-report".to_string(),
+        title: "AI review report has zero findings".to_string(),
+        exit_code: 0,
+        duration_ms: start.elapsed().as_millis() as i64,
+        stdout: format!(
+            "Verified zero findings in {}.",
+            report_path.to_string_lossy()
+        ),
+        stderr: String::new(),
+        timed_out: false,
+    }
+}
+
 fn task_has_commit_sha(task: &StateTaskV2) -> bool {
     task.commit_sha
         .as_ref()
@@ -992,6 +1106,14 @@ pub(crate) async fn forge_run_phase_checks_core(
         .iter()
         .all(|result| !result.timed_out && result.exit_code == 0);
 
+    if phase_id == "ai-review" {
+        let ai_review_result = run_ai_review_report_check(&paths, task_id);
+        if ai_review_result.timed_out || ai_review_result.exit_code != 0 {
+            ok = false;
+        }
+        results.push(ai_review_result);
+    }
+
     if let Some(task) = state.tasks.get_mut(task_index) {
         if let Some(phase) = task.phases.get_mut(phase_index) {
             if ok {
@@ -1317,6 +1439,30 @@ await fs.writeFile(ctx.generatedExecutePromptPath, 'generated prompt from post-s
             .expect("phase in task")
     }
 
+    fn write_ai_review_report(
+        workspace: &Path,
+        plan_id: &str,
+        task_id: &str,
+        findings: &[&str],
+    ) {
+        let report_path = workspace
+            .join("plans")
+            .join(plan_id)
+            .join("ai-review")
+            .join(format!("{task_id}.json"));
+        if let Some(parent) = report_path.parent() {
+            std::fs::create_dir_all(parent).expect("create ai-review report directory");
+        }
+        write_json(
+            &report_path,
+            json!({
+                "schema": "forge-ai-review-v1",
+                "taskId": task_id,
+                "findings": findings,
+            }),
+        );
+    }
+
     #[test]
     fn get_next_phase_prompt_regenerates_even_when_cached_prompt_exists() {
         run_async_test(async {
@@ -1566,6 +1712,68 @@ await fs.writeFile(ctx.generatedExecutePromptPath, 'fresh prompt from post-step\
     }
 
     #[test]
+    fn run_phase_checks_final_ai_review_requires_report_artifact() {
+        run_async_test(async {
+            let fixture = setup_six_phase_workspace(
+                "in_progress",
+                [
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "pending",
+                ],
+                0,
+            );
+            init_git_repo(&fixture.root);
+
+            let result = forge_run_phase_checks_core(&fixture.root, "alpha", "task-1", "ai-review")
+                .await
+                .expect("run phase checks");
+            assert!(!result.ok);
+            assert!(result.results.iter().any(|check| check.id == "ai-review-report"));
+
+            let task = load_state_task(&fixture.root, "alpha", "task-1");
+            assert_eq!(task.status, "in_progress");
+            assert_eq!(task.commit_sha, None);
+            assert_eq!(phase_status(&task, "ai-review"), "in_progress");
+        });
+    }
+
+    #[test]
+    fn run_phase_checks_final_ai_review_fails_when_report_has_findings() {
+        run_async_test(async {
+            let fixture = setup_six_phase_workspace(
+                "in_progress",
+                [
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "completed",
+                    "pending",
+                ],
+                0,
+            );
+            init_git_repo(&fixture.root);
+            write_ai_review_report(&fixture.root, "alpha", "task-1", &["missing test for edge case"]);
+
+            let result = forge_run_phase_checks_core(&fixture.root, "alpha", "task-1", "ai-review")
+                .await
+                .expect("run phase checks");
+            assert!(!result.ok);
+            assert!(result.results.iter().any(|check| check.id == "ai-review-report"));
+            assert!(!result.results.iter().any(|check| check.id == "forge-commit"));
+
+            let task = load_state_task(&fixture.root, "alpha", "task-1");
+            assert_eq!(task.status, "in_progress");
+            assert_eq!(task.commit_sha, None);
+            assert_eq!(phase_status(&task, "ai-review"), "in_progress");
+        });
+    }
+
+    #[test]
     fn run_phase_checks_final_ai_review_success_completes_task_and_records_commit() {
         run_async_test(async {
             let fixture = setup_six_phase_workspace(
@@ -1581,6 +1789,7 @@ await fs.writeFile(ctx.generatedExecutePromptPath, 'fresh prompt from post-step\
                 0,
             );
             init_git_repo(&fixture.root);
+            write_ai_review_report(&fixture.root, "alpha", "task-1", &[]);
 
             let result = forge_run_phase_checks_core(&fixture.root, "alpha", "task-1", "ai-review")
                 .await
