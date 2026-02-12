@@ -1035,7 +1035,7 @@ const EMPTY_FORGE_PHASE_VIEW: ForgePhaseView = {
   taskPhaseStatusByTaskId: {},
 };
 
-const DEFAULT_FORGE_PHASE_ICON_ID = "check_circle";
+const DEFAULT_FORGE_PHASE_ICON_ID = "file";
 
 function normalizeForgePhaseViewStatus(value: unknown): ForgePhaseViewStatus {
   if (typeof value !== "string") {

@@ -441,6 +441,58 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("uses a valid default icon id when forge phase metadata iconId is missing", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === "is_macos_debug_build") {
+        return false;
+      }
+      if (command !== "read_workspace_file") {
+        return undefined;
+      }
+
+      const path =
+        typeof args === "object" && args !== null && "path" in args
+          ? (args as { path?: unknown }).path
+          : undefined;
+      if (path === "plans/alpha/state.json") {
+        return {
+          content: JSON.stringify({
+            tasks: [
+              {
+                id: "task-1",
+                phases: [{ id: "implementation", status: "pending" }],
+              },
+            ],
+          }),
+          truncated: false,
+        };
+      }
+      if (path === ".agent/templates/test-first-loop/phases.json") {
+        return {
+          content: JSON.stringify({
+            schema: "forge-phases-v1",
+            phases: [{ id: "implementation", title: "Implementation", order: 1 }],
+          }),
+          truncated: false,
+        };
+      }
+
+      throw new Error(`unexpected path: ${String(path)}`);
+    });
+
+    await expect(forgeLoadPhaseView("ws-1", "alpha", "test-first-loop")).resolves.toEqual({
+      phases: [
+        { id: "implementation", title: "Implementation", iconId: "file", order: 1 },
+      ],
+      taskPhaseStatusByTaskId: {
+        "task-1": {
+          implementation: "pending",
+        },
+      },
+    });
+  });
+
   it("keeps failed phase statuses from state for downstream blocking UI", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockImplementation(async (command: string, args?: unknown) => {
