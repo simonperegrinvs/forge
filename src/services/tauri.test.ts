@@ -285,6 +285,66 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("preserves blocked and failed phase statuses for forge phase view", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === "is_macos_debug_build") {
+        return false;
+      }
+      if (command !== "read_workspace_file") {
+        return undefined;
+      }
+
+      const path =
+        typeof args === "object" && args !== null && "path" in args
+          ? (args as { path?: unknown }).path
+          : undefined;
+      if (path === "plans/alpha/state.json") {
+        return {
+          content: JSON.stringify({
+            tasks: [
+              {
+                id: "task-1",
+                phases: [
+                  { id: "implementation", status: "blocked" },
+                  { id: "ai-review", status: "failed" },
+                ],
+              },
+            ],
+          }),
+          truncated: false,
+        };
+      }
+      if (path === ".agent/templates/test-first-loop/phases.json") {
+        return {
+          content: JSON.stringify({
+            schema: "forge-phases-v1",
+            phases: [
+              { id: "implementation", title: "Implementation", iconId: "console", order: 1 },
+              { id: "ai-review", title: "AI Review", iconId: "folder-review", order: 2 },
+            ],
+          }),
+          truncated: false,
+        };
+      }
+
+      throw new Error(`unexpected path: ${String(path)}`);
+    });
+
+    await expect(forgeLoadPhaseView("ws-1", "alpha", "test-first-loop")).resolves.toEqual({
+      phases: [
+        { id: "implementation", title: "Implementation", iconId: "console", order: 1 },
+        { id: "ai-review", title: "AI Review", iconId: "folder-review", order: 2 },
+      ],
+      taskPhaseStatusByTaskId: {
+        "task-1": {
+          implementation: "blocked",
+          "ai-review": "failed",
+        },
+      },
+    });
+  });
+
   it("returns a safe fallback when forge phase-view files are malformed or truncated", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockImplementation(async (command: string, args?: unknown) => {

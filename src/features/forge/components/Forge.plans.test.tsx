@@ -674,6 +674,18 @@ describe("Forge plans", () => {
       "documentation",
       "ai-review",
     ]);
+    expect(
+      chips.map((chip) =>
+        chip.querySelector(".forge-phase-name")?.textContent?.trim(),
+      ),
+    ).toEqual([
+      "Test Case Mapping",
+      "Behavioral Tests",
+      "Implementation",
+      "Coverage Hardening",
+      "Documentation",
+      "AI Review Gate",
+    ]);
 
     const chipFor = (phaseId: string) =>
       rowElement.querySelector(`.forge-phase[data-phase-id="${phaseId}"]`) as HTMLElement | null;
@@ -682,6 +694,7 @@ describe("Forge plans", () => {
     expect(chipFor("behavioral-tests")?.className.includes("is-current")).toBe(true);
     expect(chipFor("implementation")?.className.includes("is-pending")).toBe(true);
     expect(chipFor("coverage-hardening")?.className.includes("is-pending")).toBe(true);
+    expect(chipFor("documentation")?.className.includes("is-pending")).toBe(true);
     expect(chipFor("ai-review")?.className.includes("is-pending")).toBe(true);
     expect(chipFor("ai-review")?.className.includes("is-complete")).toBe(false);
 
