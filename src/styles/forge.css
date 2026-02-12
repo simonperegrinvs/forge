@@ -316,10 +316,6 @@
   font-size: 12px;
 }
 
-.forge-phase.is-pending {
-  color: var(--text-muted);
-}
-
 .forge-phase.is-complete {
   color: var(--status-success);
 }
